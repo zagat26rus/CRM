@@ -1,0 +1,19 @@
+﻿# node / сборка
+node_modules/
+dist/
+.vite/
+.vite-cache/
+coverage/
+
+# IDE
+.vscode/
+.idea/
+
+# env / секреты
+.env
+.env.*
+!.env.example
+
+# ОС
+.DS_Store
+Thumbs.db
