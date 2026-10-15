@@ -74,6 +74,23 @@ function ensureShopSalesCategoryId(companyId) {
   return result.lastInsertRowid;
 }
 
+function ensureShopCostCategoryId(companyId) {
+  const existing = db
+    .prepare("SELECT id FROM categories WHERE companyId = ? AND name = ? AND type = 'expense'")
+    .get(companyId, 'Себестоимость продаж');
+
+  if (existing?.id) return existing.id;
+
+  const now = getCurrentTime();
+  const result = db
+    .prepare(`
+      INSERT INTO categories (companyId, name, type, description, color, icon, isActive, isDefault, createdAt, updatedAt)
+      VALUES (?, 'Себестоимость продаж', 'expense', 'Себестоимость товаров при продаже из магазина', '#ef4444', '', 1, 0, ?, ?)
+    `)
+    .run(companyId, now, now);
+  return result.lastInsertRowid;
+}
+
 // ========== КАТЕГОРИИ ==========
 
 // Список категорий
@@ -1063,10 +1080,11 @@ router.post('/sales', requireRole(['owner', 'admin', 'director']), (req, res) =>
       const paymentId = paymentResult.lastInsertRowid;
 
       if (costTotal > 0) {
+        const costCategoryId = ensureShopCostCategoryId(companyId);
         db.prepare(`
-          INSERT INTO payments (companyId, amount, type, description, date, method, createdAt, updatedAt)
-          VALUES (?, ?, 'expense', ?, ?, ?, ?, ?)
-        `).run(companyId, costTotal, `Себестоимость: ${description}`, now, payMethod, now, now);
+          INSERT INTO payments (companyId, amount, type, categoryId, description, date, method, createdAt, updatedAt)
+          VALUES (?, ?, 'expense', ?, ?, ?, ?, ?, ?)
+        `).run(companyId, costTotal, costCategoryId, `Себестоимость: ${description}`, now, payMethod, now, now);
       }
 
       const saleIds = [];
