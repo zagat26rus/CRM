@@ -26,7 +26,7 @@ type StockItem = {
   description?: string
 }
 
-type SaleLine = {
+type CartLine = {
   itemId: number
   name: string
   sku?: string
@@ -34,6 +34,8 @@ type SaleLine = {
   price: number
   purchasePrice: number
   maxQty: number
+  unit?: string
+  categoryName?: string | null
 }
 
 type ShopSale = {
@@ -79,9 +81,22 @@ const PAYMENT_METHODS = [
   { id: 'bank', name: 'Банковский перевод' },
 ]
 
+const CART_LS_KEY = 'fixnet-shop-cart-v1'
+
+function loadCartFromStorage(): CartLine[] {
+  try {
+    const raw = sessionStorage.getItem(CART_LS_KEY)
+    if (!raw) return []
+    const parsed = JSON.parse(raw)
+    return Array.isArray(parsed) ? parsed : []
+  } catch {
+    return []
+  }
+}
+
 export default function Shop() {
   const toast = useToast()
-  const [activeTab, setActiveTab] = useState<'catalog' | 'sales' | 'stats'>('catalog')
+  const [activeTab, setActiveTab] = useState<'catalog' | 'cart' | 'sales' | 'stats'>('catalog')
 
   const [items, setItems] = useState<StockItem[]>([])
   const [categories, setCategories] = useState<InvCategory[]>([])
@@ -97,14 +112,11 @@ export default function Shop() {
   const [stats, setStats] = useState<ShopStats | null>(null)
   const [statsLoading, setStatsLoading] = useState(false)
 
-  const [openSale, setOpenSale] = useState(false)
+  const [cart, setCart] = useState<CartLine[]>(() => loadCartFromStorage())
+  const [checkoutOpen, setCheckoutOpen] = useState(false)
   const [selectedSale, setSelectedSale] = useState<ShopSale | null>(null)
+  const [qtyDraft, setQtyDraft] = useState<Record<number, string>>({})
 
-  // Sale form
-  const [lines, setLines] = useState<SaleLine[]>([])
-  const [pickItemId, setPickItemId] = useState('')
-  const [pickQty, setPickQty] = useState('1')
-  const [pickPrice, setPickPrice] = useState('')
   const [clientName, setClientName] = useState('')
   const [clientPhone, setClientPhone] = useState('')
   const [clientEmail, setClientEmail] = useState('')
@@ -115,7 +127,13 @@ export default function Shop() {
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
-    if (activeTab === 'catalog') {
+    try {
+      sessionStorage.setItem(CART_LS_KEY, JSON.stringify(cart))
+    } catch {}
+  }, [cart])
+
+  useEffect(() => {
+    if (activeTab === 'catalog' || activeTab === 'cart') {
       loadCatalog()
       loadCategories()
     } else if (activeTab === 'sales') {
@@ -136,6 +154,38 @@ export default function Shop() {
     const t = setTimeout(() => loadSales(), 250)
     return () => clearTimeout(t)
   }, [saleSearch, activeTab])
+
+  // Подтянуть актуальные maxQty после обновления каталога (не выкидываем позиции из корзины при фильтре)
+  useEffect(() => {
+    if (!items.length || !cart.length) return
+    setCart((prev) => {
+      let changed = false
+      const next = prev.map((line) => {
+        const stock = items.find((i) => i.id === line.itemId)
+        if (!stock) return line
+        const maxQty = Number(stock.quantity || 0)
+        const quantity = Math.min(line.quantity, Math.max(maxQty, 0))
+        if (
+          maxQty !== line.maxQty ||
+          quantity !== line.quantity ||
+          Number(stock.purchasePrice || 0) !== line.purchasePrice
+        ) {
+          changed = true
+        }
+        return {
+          ...line,
+          maxQty,
+          purchasePrice: Number(stock.purchasePrice || line.purchasePrice || 0),
+          quantity: quantity > 0 ? quantity : line.quantity,
+          name: stock.name || line.name,
+          sku: stock.sku,
+          unit: stock.unit,
+          categoryName: stock.categoryName,
+        }
+      })
+      return changed ? next : prev
+    })
+  }, [items])
 
   async function loadCatalog() {
     try {
@@ -207,11 +257,86 @@ export default function Shop() {
     }
   }
 
-  function resetSaleForm() {
-    setLines([])
-    setPickItemId('')
-    setPickQty('1')
-    setPickPrice('')
+  function cartQtyOf(itemId: number) {
+    return cart.find((l) => l.itemId === itemId)?.quantity || 0
+  }
+
+  function addToCart(item: StockItem, addQty = 1) {
+    if (item.quantity <= 0) return toast.push('Нет на складе')
+    const qty = Math.max(1, Math.floor(Number(addQty) || 1))
+    setCart((prev) => {
+      const existing = prev.find((l) => l.itemId === item.id)
+      if (existing) {
+        const nextQty = existing.quantity + qty
+        if (nextQty > item.quantity) {
+          toast.push(`На складе только ${item.quantity} ${item.unit || 'шт'}`)
+          return prev.map((l) =>
+            l.itemId === item.id ? { ...l, quantity: item.quantity, maxQty: item.quantity } : l
+          )
+        }
+        toast.push(`В корзине: ${item.name} × ${nextQty}`)
+        return prev.map((l) =>
+          l.itemId === item.id
+            ? { ...l, quantity: nextQty, maxQty: item.quantity, price: l.price || Number(item.salePrice || 0) }
+            : l
+        )
+      }
+      if (qty > item.quantity) {
+        toast.push(`На складе только ${item.quantity}`)
+        return prev
+      }
+      toast.push(`Добавлено в корзину: ${item.name}`)
+      return [
+        ...prev,
+        {
+          itemId: item.id,
+          name: item.name,
+          sku: item.sku,
+          quantity: qty,
+          price: Number(item.salePrice || 0),
+          purchasePrice: Number(item.purchasePrice || 0),
+          maxQty: Number(item.quantity || 0),
+          unit: item.unit,
+          categoryName: item.categoryName,
+        },
+      ]
+    })
+  }
+
+  function setCartLineQty(itemId: number, qtyRaw: number | string) {
+    const qty = Math.floor(Number(qtyRaw) || 0)
+    setCart((prev) =>
+      prev
+        .map((l) => {
+          if (l.itemId !== itemId) return l
+          if (qty <= 0) return { ...l, quantity: 0 }
+          return { ...l, quantity: Math.min(qty, l.maxQty) }
+        })
+        .filter((l) => l.quantity > 0)
+    )
+  }
+
+  function setCartLinePrice(itemId: number, priceRaw: string) {
+    const price = Number(priceRaw)
+    if (!Number.isFinite(price) || price < 0) return
+    setCart((prev) => prev.map((l) => (l.itemId === itemId ? { ...l, price } : l)))
+  }
+
+  function removeFromCart(itemId: number) {
+    setCart((prev) => prev.filter((l) => l.itemId !== itemId))
+  }
+
+  function clearCart() {
+    setCart([])
+    setQtyDraft({})
+  }
+
+  const cartCount = useMemo(() => cart.reduce((s, l) => s + l.quantity, 0), [cart])
+  const cartSubtotal = useMemo(() => cart.reduce((s, l) => s + l.price * l.quantity, 0), [cart])
+  const cartCost = useMemo(() => cart.reduce((s, l) => s + l.purchasePrice * l.quantity, 0), [cart])
+  const cartProfit = cartSubtotal - cartCost
+
+  function resetCheckoutForm() {
     setClientName('')
     setClientPhone('')
     setClientEmail('')
@@ -221,108 +346,15 @@ export default function Shop() {
     setPrintAfter(true)
   }
 
-  function openSaleModal(prefillItem?: StockItem) {
-    resetSaleForm()
-    if (prefillItem) {
-      setLines([
-        {
-          itemId: prefillItem.id,
-          name: prefillItem.name,
-          sku: prefillItem.sku,
-          quantity: 1,
-          price: Number(prefillItem.salePrice || 0),
-          purchasePrice: Number(prefillItem.purchasePrice || 0),
-          maxQty: Number(prefillItem.quantity || 0),
-        },
-      ])
-    }
-    setOpenSale(true)
+  function openCheckoutModal() {
+    if (cart.length === 0) return toast.push('Корзина пуста — добавьте товары со склада')
+    const invalid = cart.find((l) => l.quantity > l.maxQty)
+    if (invalid) return toast.push(`Недостаточно «${invalid.name}» на складе`)
+    setCheckoutOpen(true)
   }
 
-  const pickItem = useMemo(
-    () => items.find((i) => String(i.id) === pickItemId) || null,
-    [items, pickItemId]
-  )
-
-  useEffect(() => {
-    if (!pickItem) {
-      setPickPrice('')
-      return
-    }
-    setPickPrice(String(pickItem.salePrice || 0))
-    setPickQty('1')
-  }, [pickItemId])
-
-  function addLine() {
-    if (!pickItem) return toast.push('Выберите товар со склада')
-    const qty = Number(pickQty || 0)
-    if (!Number.isFinite(qty) || qty <= 0) return toast.push('Количество должно быть > 0')
-    if (qty > pickItem.quantity) return toast.push(`На складе только ${pickItem.quantity}`)
-    const price = pickPrice.trim() === '' ? Number(pickItem.salePrice || 0) : Number(pickPrice)
-    if (!Number.isFinite(price) || price < 0) return toast.push('Цена некорректна')
-
-    setLines((prev) => {
-      const existing = prev.find((l) => l.itemId === pickItem.id)
-      if (existing) {
-        const nextQty = existing.quantity + qty
-        if (nextQty > pickItem.quantity) {
-          toast.push(`На складе только ${pickItem.quantity}`)
-          return prev
-        }
-        return prev.map((l) =>
-          l.itemId === pickItem.id ? { ...l, quantity: nextQty, price } : l
-        )
-      }
-      return [
-        ...prev,
-        {
-          itemId: pickItem.id,
-          name: pickItem.name,
-          sku: pickItem.sku,
-          quantity: qty,
-          price,
-          purchasePrice: Number(pickItem.purchasePrice || 0),
-          maxQty: Number(pickItem.quantity || 0),
-        },
-      ]
-    })
-    setPickItemId('')
-    setPickQty('1')
-    setPickPrice('')
-  }
-
-  function updateLineQty(itemId: number, qtyStr: string) {
-    const qty = Number(qtyStr || 0)
-    setLines((prev) =>
-      prev.map((l) => {
-        if (l.itemId !== itemId) return l
-        if (!Number.isFinite(qty) || qty <= 0) return l
-        return { ...l, quantity: Math.min(qty, l.maxQty) }
-      })
-    )
-  }
-
-  function updateLinePrice(itemId: number, priceStr: string) {
-    const price = Number(priceStr || 0)
-    setLines((prev) =>
-      prev.map((l) =>
-        l.itemId === itemId && Number.isFinite(price) && price >= 0 ? { ...l, price } : l
-      )
-    )
-  }
-
-  const saleSubtotal = useMemo(
-    () => lines.reduce((s, l) => s + l.price * l.quantity, 0),
-    [lines]
-  )
-  const saleCost = useMemo(
-    () => lines.reduce((s, l) => s + l.purchasePrice * l.quantity, 0),
-    [lines]
-  )
-  const saleProfit = saleSubtotal - saleCost
-
-  async function submitSale() {
-    if (lines.length === 0) return toast.push('Добавьте товары со склада')
+  async function submitCheckout() {
+    if (cart.length === 0) return toast.push('Корзина пуста')
     setSaving(true)
     try {
       const resp = await apiFetch('/shop/sales', {
@@ -335,7 +367,7 @@ export default function Shop() {
           notes: notes.trim(),
           paymentMethod,
           saleCategory,
-          items: lines.map((l) => ({
+          items: cart.map((l) => ({
             itemId: l.itemId,
             quantity: l.quantity,
             price: l.price,
@@ -345,12 +377,14 @@ export default function Shop() {
       const data = await resp.json().catch(() => null)
       if (!resp.ok) throw new Error(data?.error || `Ошибка ${resp.status}`)
 
-      toast.push('Продажа проведена: склад списан, платежи созданы')
+      toast.push(`Продажа ${data?.order?.orderNumber || ''} проведена: ${cart.length} поз., склад списан`)
       notifyBalanceChanged()
-      setOpenSale(false)
-      resetSaleForm()
+      clearCart()
+      resetCheckoutForm()
+      setCheckoutOpen(false)
       await loadCatalog()
       if (activeTab === 'sales') await loadSales()
+      setActiveTab('sales')
 
       if (printAfter && data?.invoice) {
         printInvoice(data.invoice)
@@ -392,7 +426,7 @@ export default function Shop() {
   function generateInvoiceHtml(data: any) {
     const { order, company, invoiceDate } = data
     const date = new Date(invoiceDate || order.createdAt || Date.now()).toLocaleDateString('ru-RU')
-    const items = order.items || []
+    const orderItems = order.items || []
 
     return `<!DOCTYPE html>
 <html lang="ru">
@@ -448,7 +482,7 @@ export default function Shop() {
       </tr>
     </thead>
     <tbody>
-      ${items
+      ${orderItems
         .map(
           (item: any, idx: number) => `
         <tr>
@@ -474,27 +508,28 @@ export default function Shop() {
 </html>`
   }
 
-  const catalogAvailable = useMemo(
-    () => items.filter((i) => Number(i.quantity) > 0),
-    [items]
-  )
-
   return (
-    <div className='space-y-4'>
+    <div className='space-y-4 pb-24'>
       <div className='flex items-center justify-between gap-3 flex-wrap'>
         <div>
           <h1 className='text-2xl font-bold'>Магазин</h1>
-          <p className='text-sm text-muted mt-1'>Продажа со склада · списание · платежи · накладная</p>
+          <p className='text-sm text-muted mt-1'>Корзина · продажа со склада · списание · платежи · накладная</p>
         </div>
-        <button className='btn' onClick={() => openSaleModal()}>
-          + Продажа
-        </button>
+        <div className='flex gap-2'>
+          <button className='btn secondary' onClick={() => setActiveTab('cart')}>
+            Корзина{cartCount > 0 ? ` (${cartCount})` : ''}
+          </button>
+          <button className='btn' disabled={cart.length === 0} onClick={openCheckoutModal}>
+            Оформить
+          </button>
+        </div>
       </div>
 
-      <div className='flex gap-2 border-b border-border'>
+      <div className='flex gap-2 border-b border-border overflow-x-auto'>
         {(
           [
             ['catalog', 'Каталог склада'],
+            ['cart', `Корзина${cartCount ? ` · ${cartCount}` : ''}`],
             ['sales', 'Продажи'],
             ['stats', 'Статистика'],
           ] as const
@@ -502,7 +537,7 @@ export default function Shop() {
           <button
             key={id}
             onClick={() => setActiveTab(id)}
-            className={`px-4 py-2 font-medium transition ${
+            className={`px-4 py-2 font-medium transition whitespace-nowrap ${
               activeTab === id ? 'border-b-2 border-primary text-primary' : 'text-muted hover:text-text'
             }`}
           >
@@ -550,38 +585,181 @@ export default function Shop() {
                     <th className='p-3'>Остаток</th>
                     <th className='p-3'>Закуп, ₽</th>
                     <th className='p-3'>Продажа, ₽</th>
+                    <th className='p-3'>Кол-во</th>
                     <th className='p-3'></th>
                   </tr>
                 </thead>
                 <tbody>
-                  {items.map((item) => (
-                    <tr key={item.id} className='border-t border-border hover:bg-surface/50'>
-                      <td className='p-3'>
-                        <div className='font-medium'>{item.name}</div>
-                        {item.sku ? <div className='text-xs text-muted'>{item.sku}</div> : null}
-                      </td>
-                      <td className='p-3 text-muted'>{item.categoryName || '—'}</td>
-                      <td className='p-3'>
-                        <span className={item.quantity > 0 ? 'text-green-500' : 'text-red-500'}>
-                          {item.quantity} {item.unit || 'шт'}
-                        </span>
-                      </td>
-                      <td className='p-3 text-muted'>{Number(item.purchasePrice || 0).toLocaleString('ru-RU')}</td>
-                      <td className='p-3 font-medium'>{Number(item.salePrice || 0).toLocaleString('ru-RU')}</td>
-                      <td className='p-3 text-right'>
-                        <button
-                          className='btn secondary'
-                          disabled={item.quantity <= 0}
-                          onClick={() => openSaleModal(item)}
-                        >
-                          Продать
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
+                  {items.map((item) => {
+                    const inCart = cartQtyOf(item.id)
+                    const draft = qtyDraft[item.id] ?? '1'
+                    return (
+                      <tr key={item.id} className='border-t border-border hover:bg-surface/50'>
+                        <td className='p-3'>
+                          <div className='font-medium'>{item.name}</div>
+                          {item.sku ? <div className='text-xs text-muted'>{item.sku}</div> : null}
+                          {inCart > 0 ? (
+                            <div className='text-xs text-primary mt-1'>В корзине: {inCart}</div>
+                          ) : null}
+                        </td>
+                        <td className='p-3 text-muted'>{item.categoryName || '—'}</td>
+                        <td className='p-3'>
+                          <span className={item.quantity > 0 ? 'text-green-500' : 'text-red-500'}>
+                            {item.quantity} {item.unit || 'шт'}
+                          </span>
+                        </td>
+                        <td className='p-3 text-muted'>{Number(item.purchasePrice || 0).toLocaleString('ru-RU')}</td>
+                        <td className='p-3 font-medium'>{Number(item.salePrice || 0).toLocaleString('ru-RU')}</td>
+                        <td className='p-3 w-24'>
+                          <input
+                            className='input w-20'
+                            type='number'
+                            min='1'
+                            max={item.quantity}
+                            disabled={item.quantity <= 0}
+                            value={draft}
+                            onChange={(e) => setQtyDraft((d) => ({ ...d, [item.id]: e.target.value }))}
+                          />
+                        </td>
+                        <td className='p-3 text-right whitespace-nowrap'>
+                          <button
+                            className='btn secondary'
+                            disabled={item.quantity <= 0}
+                            onClick={() => addToCart(item, Number(draft || 1))}
+                          >
+                            В корзину
+                          </button>
+                        </td>
+                      </tr>
+                    )
+                  })}
                 </tbody>
               </table>
             </div>
+          )}
+        </div>
+      )}
+
+      {activeTab === 'cart' && (
+        <div className='space-y-4'>
+          {cart.length === 0 ? (
+            <div className='card p-8 text-center space-y-3'>
+              <div className='text-muted'>Корзина пуста</div>
+              <button className='btn' onClick={() => setActiveTab('catalog')}>
+                Перейти в каталог
+              </button>
+            </div>
+          ) : (
+            <>
+              <div className='card overflow-x-auto'>
+                <table className='w-full text-sm'>
+                  <thead>
+                    <tr className='text-left text-muted border-b border-border'>
+                      <th className='p-3'>Товар</th>
+                      <th className='p-3'>Категория</th>
+                      <th className='p-3'>Кол-во</th>
+                      <th className='p-3'>Цена, ₽</th>
+                      <th className='p-3'>Сумма</th>
+                      <th className='p-3'>Закуп</th>
+                      <th className='p-3'></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {cart.map((line) => (
+                      <tr key={line.itemId} className='border-t border-border'>
+                        <td className='p-3'>
+                          <div className='font-medium'>{line.name}</div>
+                          <div className='text-xs text-muted'>макс. {line.maxQty} {line.unit || 'шт'}</div>
+                        </td>
+                        <td className='p-3 text-muted'>{line.categoryName || '—'}</td>
+                        <td className='p-3'>
+                          <div className='flex items-center gap-1'>
+                            <button
+                              type='button'
+                              className='btn ghost px-2'
+                              onClick={() => setCartLineQty(line.itemId, line.quantity - 1)}
+                            >
+                              −
+                            </button>
+                            <input
+                              className='input w-16 text-center'
+                              type='number'
+                              min='1'
+                              max={line.maxQty}
+                              value={line.quantity}
+                              onChange={(e) => setCartLineQty(line.itemId, e.target.value)}
+                            />
+                            <button
+                              type='button'
+                              className='btn ghost px-2'
+                              disabled={line.quantity >= line.maxQty}
+                              onClick={() => setCartLineQty(line.itemId, line.quantity + 1)}
+                            >
+                              +
+                            </button>
+                          </div>
+                        </td>
+                        <td className='p-3'>
+                          <input
+                            className='input w-28'
+                            type='number'
+                            min='0'
+                            step='0.01'
+                            value={line.price}
+                            onChange={(e) => setCartLinePrice(line.itemId, e.target.value)}
+                          />
+                        </td>
+                        <td className='p-3 font-medium'>
+                          {(line.price * line.quantity).toLocaleString('ru-RU')} ₽
+                        </td>
+                        <td className='p-3 text-muted'>
+                          {(line.purchasePrice * line.quantity).toLocaleString('ru-RU')} ₽
+                        </td>
+                        <td className='p-3 text-right'>
+                          <button className='btn ghost' onClick={() => removeFromCart(line.itemId)}>
+                            Удалить
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className='card p-4 space-y-3'>
+                <div className='flex justify-between text-sm'>
+                  <span className='text-muted'>Позиций / штук</span>
+                  <span>
+                    {cart.length} / {cartCount}
+                  </span>
+                </div>
+                <div className='flex justify-between text-sm'>
+                  <span className='text-muted'>Сумма продажи</span>
+                  <span className='font-semibold'>{cartSubtotal.toLocaleString('ru-RU')} ₽</span>
+                </div>
+                <div className='flex justify-between text-sm'>
+                  <span className='text-muted'>Себестоимость</span>
+                  <span>{cartCost.toLocaleString('ru-RU')} ₽</span>
+                </div>
+                <div className='flex justify-between pt-2 border-t border-border'>
+                  <span className='font-medium'>Прибыль</span>
+                  <span className={`font-bold ${cartProfit >= 0 ? 'text-success' : 'text-danger'}`}>
+                    {cartProfit.toLocaleString('ru-RU')} ₽
+                  </span>
+                </div>
+                <div className='flex flex-wrap gap-2 justify-end pt-2'>
+                  <button className='btn secondary' onClick={() => setActiveTab('catalog')}>
+                    + Ещё товары
+                  </button>
+                  <button className='btn ghost' onClick={clearCart}>
+                    Очистить
+                  </button>
+                  <button className='btn' onClick={openCheckoutModal}>
+                    Оформить продажу
+                  </button>
+                </div>
+              </div>
+            </>
           )}
         </div>
       )}
@@ -595,9 +773,6 @@ export default function Shop() {
               value={saleSearch}
               onChange={(e) => setSaleSearch(e.target.value)}
             />
-            <button className='btn' onClick={() => openSaleModal()}>
-              + Продажа
-            </button>
           </div>
 
           {salesLoading ? (
@@ -637,8 +812,8 @@ export default function Shop() {
                           {sale.clientPhone ? <div className='text-xs text-muted'>{sale.clientPhone}</div> : null}
                         </td>
                         <td className='p-3 text-muted'>
-                          {sale.items?.slice(0, 2).map((i) => `${i.name} × ${i.quantity}`).join(', ')}
-                          {sale.items?.length > 2 ? ` +${sale.items.length - 2}` : ''}
+                          {sale.items?.slice(0, 3).map((i) => `${i.name} × ${i.quantity}`).join(', ')}
+                          {sale.items?.length > 3 ? ` +${sale.items.length - 3}` : ''}
                         </td>
                         <td className='p-3 font-medium'>{Number(sale.total || 0).toLocaleString('ru-RU')} ₽</td>
                         <td className='p-3 text-muted'>{Number(cost || 0).toLocaleString('ru-RU')} ₽</td>
@@ -684,35 +859,54 @@ export default function Shop() {
                   <div className='text-2xl font-bold'>{stats.activeProducts}</div>
                 </div>
               </div>
-              {stats.popularProducts?.length > 0 && (
-                <div className='card p-4'>
-                  <h3 className='font-medium mb-3'>Позиции с остатком</h3>
-                  <div className='space-y-2'>
-                    {stats.popularProducts.map((p) => (
-                      <div key={p.id} className='flex justify-between text-sm border-b border-border pb-2'>
-                        <span>{p.name}</span>
-                        <span className='text-muted'>{Number(p.price || 0).toLocaleString('ru-RU')} ₽</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
             </>
           )}
         </div>
       )}
 
-      {openSale && (
+      {/* Sticky cart bar */}
+      {cartCount > 0 && activeTab !== 'cart' && (
+        <div className='fixed bottom-[calc(3.5rem+env(safe-area-inset-bottom))] lg:bottom-4 left-0 right-0 z-30 px-3 pointer-events-none'>
+          <div className='max-w-3xl mx-auto pointer-events-auto card p-3 flex items-center justify-between gap-3 shadow-lg border border-primary/30'>
+            <div className='min-w-0'>
+              <div className='font-medium truncate'>
+                Корзина: {cart.length} поз. · {cartCount} шт
+              </div>
+              <div className='text-sm text-muted'>{cartSubtotal.toLocaleString('ru-RU')} ₽</div>
+            </div>
+            <div className='flex gap-2 shrink-0'>
+              <button className='btn secondary' onClick={() => setActiveTab('cart')}>
+                Открыть
+              </button>
+              <button className='btn' onClick={openCheckoutModal}>
+                Оформить
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {checkoutOpen && (
         <Modal
-          title='Новая продажа'
+          title={`Оформление продажи · ${cart.length} поз.`}
           onClose={() => {
-            if (!saving) {
-              setOpenSale(false)
-              resetSaleForm()
-            }
+            if (!saving) setCheckoutOpen(false)
           }}
         >
           <div className='space-y-4'>
+            <div className='p-3 rounded-xl border border-border space-y-2 max-h-48 overflow-auto'>
+              {cart.map((l) => (
+                <div key={l.itemId} className='flex justify-between gap-2 text-sm'>
+                  <span className='truncate'>
+                    {l.name} × {l.quantity}
+                  </span>
+                  <span className='shrink-0 font-medium'>
+                    {(l.price * l.quantity).toLocaleString('ru-RU')} ₽
+                  </span>
+                </div>
+              ))}
+            </div>
+
             <div className='grid md:grid-cols-2 gap-3'>
               <div>
                 <label className='label'>Покупатель</label>
@@ -772,94 +966,6 @@ export default function Shop() {
               </div>
             </div>
 
-            <div className='p-3 rounded-xl border border-border space-y-3'>
-              <div className='font-medium'>Товары со склада</div>
-              <div className='grid md:grid-cols-4 gap-2'>
-                <div className='md:col-span-2'>
-                  <Select className='select' value={pickItemId} onChange={(e) => setPickItemId(e.target.value)}>
-                    <option value=''>Выберите товар...</option>
-                    {catalogAvailable.map((i) => (
-                      <option key={i.id} value={String(i.id)}>
-                        {i.name} — {i.quantity} шт · {Number(i.salePrice || 0).toLocaleString('ru-RU')} ₽
-                      </option>
-                    ))}
-                  </Select>
-                </div>
-                <div>
-                  <input
-                    className='input'
-                    type='number'
-                    min='1'
-                    step='1'
-                    value={pickQty}
-                    onChange={(e) => setPickQty(e.target.value)}
-                    placeholder='Кол-во'
-                  />
-                </div>
-                <div>
-                  <input
-                    className='input'
-                    type='number'
-                    min='0'
-                    step='0.01'
-                    value={pickPrice}
-                    onChange={(e) => setPickPrice(e.target.value)}
-                    placeholder='Цена'
-                  />
-                </div>
-              </div>
-              {pickItem ? (
-                <div className='text-xs text-muted'>
-                  Остаток: {pickItem.quantity} · Закуп: {Number(pickItem.purchasePrice || 0).toLocaleString('ru-RU')} ₽
-                  {pickItem.categoryName ? ` · ${pickItem.categoryName}` : ''}
-                </div>
-              ) : null}
-              <button type='button' className='btn secondary' onClick={addLine}>
-                Добавить в чек
-              </button>
-
-              {lines.length > 0 && (
-                <div className='space-y-2 pt-2 border-t border-border'>
-                  {lines.map((l) => (
-                    <div key={l.itemId} className='flex flex-col sm:flex-row gap-2 items-start sm:items-center'>
-                      <div className='flex-1 min-w-0'>
-                        <div className='font-medium truncate'>{l.name}</div>
-                        <div className='text-xs text-muted'>
-                          макс. {l.maxQty} · закуп {(l.purchasePrice * l.quantity).toLocaleString('ru-RU')} ₽
-                        </div>
-                      </div>
-                      <input
-                        className='input w-24'
-                        type='number'
-                        min='1'
-                        max={l.maxQty}
-                        value={l.quantity}
-                        onChange={(e) => updateLineQty(l.itemId, e.target.value)}
-                      />
-                      <input
-                        className='input w-28'
-                        type='number'
-                        min='0'
-                        step='0.01'
-                        value={l.price}
-                        onChange={(e) => updateLinePrice(l.itemId, e.target.value)}
-                      />
-                      <div className='w-24 text-right font-medium'>
-                        {(l.price * l.quantity).toLocaleString('ru-RU')} ₽
-                      </div>
-                      <button
-                        type='button'
-                        className='btn ghost'
-                        onClick={() => setLines((prev) => prev.filter((x) => x.itemId !== l.itemId))}
-                      >
-                        ✕
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
             <div>
               <label className='label'>Комментарий</label>
               <textarea
@@ -879,32 +985,25 @@ export default function Shop() {
             <div className='p-4 bg-surface rounded-xl space-y-2'>
               <div className='flex justify-between text-sm'>
                 <span className='text-muted'>Сумма продажи</span>
-                <span className='font-semibold'>{saleSubtotal.toLocaleString('ru-RU')} ₽</span>
+                <span className='font-semibold'>{cartSubtotal.toLocaleString('ru-RU')} ₽</span>
               </div>
               <div className='flex justify-between text-sm'>
                 <span className='text-muted'>Себестоимость</span>
-                <span>{saleCost.toLocaleString('ru-RU')} ₽</span>
+                <span>{cartCost.toLocaleString('ru-RU')} ₽</span>
               </div>
               <div className='flex justify-between pt-2 border-t border-border'>
                 <span className='font-medium'>Прибыль</span>
-                <span className={`font-bold ${saleProfit >= 0 ? 'text-success' : 'text-danger'}`}>
-                  {saleProfit.toLocaleString('ru-RU')} ₽
+                <span className={`font-bold ${cartProfit >= 0 ? 'text-success' : 'text-danger'}`}>
+                  {cartProfit.toLocaleString('ru-RU')} ₽
                 </span>
               </div>
             </div>
 
             <div className='flex gap-2 justify-end pt-2 border-t border-border'>
-              <button
-                className='btn secondary'
-                disabled={saving}
-                onClick={() => {
-                  setOpenSale(false)
-                  resetSaleForm()
-                }}
-              >
-                Отмена
+              <button className='btn secondary' disabled={saving} onClick={() => setCheckoutOpen(false)}>
+                Назад к корзине
               </button>
-              <button className='btn' disabled={saving || lines.length === 0} onClick={submitSale}>
+              <button className='btn' disabled={saving || cart.length === 0} onClick={submitCheckout}>
                 {saving ? 'Проведение...' : 'Провести продажу'}
               </button>
             </div>
