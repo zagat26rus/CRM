@@ -58,5 +58,5 @@
 .grid-3 { @apply grid grid-cols-1 md:grid-cols-3 gap-4; }
 hr.divider { @apply border-border; }
 .toast {
-  @apply fixed bottom-6 right-6 bg-surface border border-border text-text px-4 py-3 rounded-xl shadow-soft;
+  @apply bg-surface border border-border text-text px-4 py-3 rounded-xl shadow-soft;
 }
