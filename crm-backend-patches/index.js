@@ -66,6 +66,7 @@ const searchRoutes = require('./routes/search');
 const warrantiesRoutes = require('./routes/warranties');
 const publicTrackRoutes = require('./routes/publicTrack');
 const aiRoutes = require('./routes/ai');
+const aiAgentRoutes = require('./routes/aiAgent');
 const digestRoutes = require('./routes/digest');
 const telegram = require('./telegram');
 
@@ -95,6 +96,7 @@ app.use('/api/announcements', announcementsRoutes);
 app.use('/api/marketing', marketingRoutes);
 app.use('/api/search', searchRoutes);
 app.use('/api/warranties', warrantiesRoutes);
+app.use('/api/ai/agent', aiAgentRoutes);
 app.use('/api/ai', aiRoutes);
 app.use('/api/digest', digestRoutes);
 app.use('/api/telegram', telegram.router);

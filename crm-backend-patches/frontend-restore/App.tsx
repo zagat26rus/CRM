@@ -25,6 +25,7 @@ import Invite from './pages/Invite'
 import { useAuth } from './auth'
 import { apiFetch } from './api'
 import GlobalSearch from './components/GlobalSearch'
+import AiAssistant from './components/AiAssistant'
 
 const menu = [
   { to: '/', label: 'Тренды' },
@@ -206,6 +207,7 @@ export default function App(){
       )}
 
       <Toasts />
+      {!isAuthRoute && <AiAssistant />}
     </div>
   )
 }

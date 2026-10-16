@@ -39,6 +39,7 @@ type Order = {
   brand: string;
   model: string;
   color?: string;
+  deviceStorage?: string;
   deviceType?: string;
   imei?: string;
   serialNumber?: string;
@@ -1794,7 +1795,7 @@ function OrderModal({
 }) {
   const [form, setForm] = useState({
     client: '', phone: '', email: '', clientAddress: '',
-    problem: '', brand: '', model: '', color: '', deviceType: 'Смартфон',
+    problem: '', brand: '', model: '', color: '', deviceStorage: '', deviceType: 'Смартфон',
     imei: '', serialNumber: '', equipment: '', devicePassword: '',
     prepayment: '', estimatedPrice: '',
     managerName: '', executorName: '', dueAt: '', isUrgent: false, receiverNotes: '',
@@ -1805,7 +1806,40 @@ function OrderModal({
     price: '', costPrice: '', description: '', warranty: false, onSite: false, paymentMethod: 'cash'
   });
   const [printAfterSave, setPrintAfterSave] = useState(true)
+  const [imeiLookupLoading, setImeiLookupLoading] = useState(false)
+  const [imeiLookupMessage, setImeiLookupMessage] = useState('')
   const catalog = useDeviceCatalog()
+
+  const lookupImei = async () => {
+    const imei = String(form.imei || '').replace(/\D/g, '')
+    if (imei.length !== 15) {
+      setImeiLookupMessage(imei ? 'IMEI должен содержать 15 цифр' : '')
+      return
+    }
+    setImeiLookupLoading(true)
+    setImeiLookupMessage('')
+    try {
+      const response = await apiFetch(`/ai/agent/imei/${imei}`)
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(data.error || 'Не удалось определить устройство')
+      setForm((prev) => ({
+        ...prev,
+        brand: data.brand || prev.brand,
+        model: data.model || prev.model,
+        color: data.color || prev.color,
+        deviceStorage: data.storage || prev.deviceStorage,
+        deviceType: data.deviceType || prev.deviceType,
+      }))
+      setImeiLookupMessage(
+        [data.brand, data.model, data.color, data.storage].filter(Boolean).join(' • ') ||
+          'IMEI проверен, но характеристики не найдены',
+      )
+    } catch (error: any) {
+      setImeiLookupMessage(error?.message || 'Ошибка проверки IMEI')
+    } finally {
+      setImeiLookupLoading(false)
+    }
+  }
 
   const crmIssueNames = useMemo(
     () => problems.filter((p) => !form.deviceType || p.deviceType === form.deviceType).map((p) => p.name),
@@ -2155,7 +2189,35 @@ function OrderModal({
 
             <div>
               <label className='label'>IMEI</label>
-              <input className='input' value={(form as any).imei || ''} onChange={(e) => setForm(prev => ({...prev, imei: e.target.value}))} placeholder='IMEI' />
+              <div className='flex gap-2'>
+                <input
+                  className='input'
+                  inputMode='numeric'
+                  value={(form as any).imei || ''}
+                  onChange={(e) => setForm(prev => ({...prev, imei: e.target.value.replace(/\D/g, '').slice(0, 15)}))}
+                  onBlur={lookupImei}
+                  placeholder='15 цифр'
+                />
+                <button
+                  type='button'
+                  className='btn secondary shrink-0'
+                  disabled={imeiLookupLoading || String(form.imei || '').replace(/\D/g, '').length !== 15}
+                  onClick={lookupImei}
+                >
+                  {imeiLookupLoading ? '…' : 'Определить'}
+                </button>
+              </div>
+              {imeiLookupMessage && <div className='text-xs text-muted mt-1'>{imeiLookupMessage}</div>}
+            </div>
+
+            <div>
+              <label className='label'>Память</label>
+              <input
+                className='input'
+                value={(form as any).deviceStorage || ''}
+                onChange={(e) => setForm(prev => ({ ...prev, deviceStorage: e.target.value }))}
+                placeholder='128 GB'
+              />
             </div>
 
             <div>
