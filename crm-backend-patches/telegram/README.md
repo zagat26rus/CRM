@@ -38,14 +38,21 @@ Webhook регистрируется запросом `setWebhook` с `secret_to
 Роли задач: администратор, техник 1, техник 2, менеджер, курьер. Автор действия уведомление о нём не получает.
 Администрация (owner/admin/director) настраивает всё в CRM; сотрудник может менять свои уведомления в боте.
 
-## Ретранслятор (если сервер CRM не достаёт до api.telegram.org)
+## Ретранслятор (обязателен для хостинга 45.8.230.220)
 
-Входящие сообщения (webhook) работают всегда. Исходящие: push-уведомления, загрузка фото, тест — требуют доступа до Telegram.
-Без него бот отвечает на сообщения прямо в ответе webhook (меню, списки, карточки, смена статуса), но не присылает уведомления и не принимает фото.
+Проверено: хостинг CRM не пропускает трафик в обе стороны. Исходящие запросы к `api.telegram.org` зависают на TLS,
+а серверы Telegram не могут достучаться до `fedfix.ru` (`getWebhookInfo`: `Connection timed out`, пакетов с адресов Telegram на сервер нет).
+Поэтому нужен посредник вне РФ, который доступен и Telegram, и CRM. Один воркер закрывает оба направления:
 
-1. Cloudflare Worker: создайте воркер из `relay/cloudflare-worker.js`, задайте секрет `RELAY_KEY`. Либо nginx на VPS вне РФ: `relay/nginx-relay.conf`.
-2. В `back/.env`: `TELEGRAM_API_BASE=https://<адрес-воркера>` и `TELEGRAM_RELAY_KEY=<тот же секрет>`.
-3. `pm2 restart black-crm-back`. В CRM → Telegram-бот состояние API перестанет показывать предупреждение.
+* Telegram -> `https://<воркер>/hook` -> CRM `/api/telegram/webhook`;
+* CRM -> `https://<воркер>/bot...` -> `api.telegram.org` (с заголовком `x-relay-key`).
+
+1. Cloudflare Worker: создайте воркер с кодом `relay/cloudflare-worker.js` (Workers & Pages -> Create -> Hello World -> Edit code -> Deploy).
+   В Settings -> Variables добавьте `RELAY_KEY` (секрет, длинная случайная строка) и `CRM_WEBHOOK_URL=https://www.fedfix.ru/api/telegram/webhook`.
+   Либо VPS вне РФ с nginx: `relay/nginx-relay.conf`.
+2. В `back/.env` на сервере CRM:
+   `TELEGRAM_API_BASE=https://<воркер>`, `TELEGRAM_RELAY_KEY=<тот же секрет>`, `TELEGRAM_WEBHOOK_URL=https://<воркер>/hook`.
+3. `pm2 restart black-crm-back`. CRM сама перерегистрирует webhook на адрес воркера (`ensureWebhook`).
 
 ## Откат
 
