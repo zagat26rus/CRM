@@ -130,7 +130,7 @@ router.post('/test', requireAuth, async (req, res) => {
   } catch (e) {
     return res.status(502).json({
       error: e.network
-        ? 'Сервер CRM не может подключиться к Telegram (исходящая связь заблокирована). Настройте ретранслятор — см. инструкцию.'
+        ? 'Сервер CRM не смог связаться с Telegram (канал нестабилен). Попробуйте ещё раз через минуту.'
         : e.message,
     });
   }

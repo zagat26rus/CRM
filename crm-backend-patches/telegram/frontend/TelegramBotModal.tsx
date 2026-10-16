@@ -180,10 +180,9 @@ export default function TelegramBotModal({ onClose }: { onClose: () => void }) {
 
           {status.configured && apiBad && (
             <div className='card-inner border border-border rounded-lg text-sm space-y-1'>
-              <div className='font-semibold'>Сервер CRM не достучался до Telegram</div>
+              <div className='font-semibold'>Связь сервера CRM с Telegram нестабильна</div>
               <div className='text-muted'>
-                Ответы на сообщения в боте работают, но уведомления, загрузка фото и тестовые сообщения не будут
-                отправляться, пока не настроен ретранслятор (TELEGRAM_API_BASE).
+                Хостинг пропускает часть соединений к Telegram. Бот продолжает пробовать, уведомления придут, когда связь восстановится.
               </div>
             </div>
           )}

@@ -11,11 +11,13 @@
 | `TELEGRAM_WEBHOOK_SECRET` | секрет заголовка `X-Telegram-Bot-Api-Secret-Token` |
 | `TELEGRAM_WEBHOOK_URL` | по умолчанию `https://www.fedfix.ru/api/telegram/webhook` |
 | `TELEGRAM_BOT_USERNAME` | по умолчанию `fixnetcrm_bot` |
-| `TELEGRAM_API_BASE` | адрес ретранслятора (по умолчанию `https://api.telegram.org`) |
+| `TELEGRAM_MODE` | `polling` (по умолчанию для прямого соединения) или `webhook` |
+| `TELEGRAM_API_IPS` | адреса api.telegram.org через запятую, по умолчанию `149.154.167.220,149.154.167.221,149.154.167.222,149.154.166.110` |
+| `TELEGRAM_API_BASE` | адрес ретранслятора (по умолчанию `https://api.telegram.org`, прямое соединение) |
 | `TELEGRAM_RELAY_KEY` | секрет ретранслятора, уходит заголовком `x-relay-key` |
 | `TELEGRAM_TZ` | часовой пояс сводок, по умолчанию `Europe/Moscow` |
 
-Webhook регистрируется запросом `setWebhook` с `secret_token` и `allowed_updates=["message","callback_query"]`.
+В режиме webhook он регистрируется `setWebhook` с `secret_token`; в режиме polling webhook снимается автоматически.
 
 ## Привязка сотрудника
 
@@ -38,21 +40,19 @@ Webhook регистрируется запросом `setWebhook` с `secret_to
 Роли задач: администратор, техник 1, техник 2, менеджер, курьер. Автор действия уведомление о нём не получает.
 Администрация (owner/admin/director) настраивает всё в CRM; сотрудник может менять свои уведомления в боте.
 
-## Ретранслятор (обязателен для хостинга 45.8.230.220)
+## Как бот получает сообщения (long polling)
 
-Проверено: хостинг CRM не пропускает трафик в обе стороны. Исходящие запросы к `api.telegram.org` зависают на TLS,
-а серверы Telegram не могут достучаться до `fedfix.ru` (`getWebhookInfo`: `Connection timed out`, пакетов с адресов Telegram на сервер нет).
-Поэтому нужен посредник вне РФ, который доступен и Telegram, и CRM. Один воркер закрывает оба направления:
+Проверено на `45.8.230.220`: исходящие соединения к Telegram проходят нестабильно (около четверти попыток),
+причём только к `149.154.167.220` и ещё нескольким адресам. DNS отдаёт заблокированный `149.154.166.110`, а входящие соединения
+от серверов Telegram до `fedfix.ru` не доходят вовсе, поэтому webhook не работает. Основной бот сайта живёт на том же принципе.
 
-* Telegram -> `https://<воркер>/hook` -> CRM `/api/telegram/webhook`;
-* CRM -> `https://<воркер>/bot...` -> `api.telegram.org` (с заголовком `x-relay-key`).
+Поэтому по умолчанию включён режим `polling` (`TELEGRAM_MODE=polling`):
+* бот сам забирает обновления методом `getUpdates` (смещение хранится в `telegram_cursors`, ключ `tg_offset`);
+* адреса Telegram заданы явно (`TELEGRAM_API_IPS`), соединение открывается четырьмя параллельными попытками, выигрывает первая;
+* ответы, которые не удалось отправить, ставятся в очередь `telegram_outbox` и уходят позже.
 
-1. Cloudflare Worker: создайте воркер с кодом `relay/cloudflare-worker.js` (Workers & Pages -> Create -> Hello World -> Edit code -> Deploy).
-   В Settings -> Variables добавьте `RELAY_KEY` (секрет, длинная случайная строка) и `CRM_WEBHOOK_URL=https://www.fedfix.ru/api/telegram/webhook`.
-   Либо VPS вне РФ с nginx: `relay/nginx-relay.conf`.
-2. В `back/.env` на сервере CRM:
-   `TELEGRAM_API_BASE=https://<воркер>`, `TELEGRAM_RELAY_KEY=<тот же секрет>`, `TELEGRAM_WEBHOOK_URL=https://<воркер>/hook`.
-3. `pm2 restart black-crm-back`. CRM сама перерегистрирует webhook на адрес воркера (`ensureWebhook`).
+Webhook (`TELEGRAM_MODE=webhook`) подходит, если сервер доступен для Telegram. Тогда можно задать `TELEGRAM_API_BASE` ретранслятора:
+`relay/cloudflare-worker.js` или `relay/nginx-relay.conf` проксируют оба направления; адрес webhook — `https://<воркер>/hook`.
 
 ## Откат
 

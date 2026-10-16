@@ -1,4 +1,6 @@
 const tg = require('./tgApi');
+const store = require('./store');
+const { cfg } = require('./config');
 
 const MAX_TEXT = 4000;
 
@@ -87,9 +89,15 @@ class Ctx {
     return resp;
   }
 
+  requeue(items) {
+    for (const item of items) store.enqueue(this.chatId, { text: item.text, kb: item.kb || null });
+    return {};
+  }
+
   /** Возвращает объект для тела HTTP-ответа webhook'а (пустой, если всё отправлено напрямую). */
   async flush() {
-    if (!tg.isUp()) return this.inlineResponse();
+    const polling = cfg().mode === 'polling';
+    if (!tg.isUp()) return polling ? this.requeue(this.items) : this.inlineResponse();
     const pending = [...this.items];
     try {
       if (this.callback) {
@@ -116,7 +124,7 @@ class Ctx {
     } catch (e) {
       if (!e.network) throw e;
       this.items = pending;
-      return this.inlineResponse();
+      return polling ? this.requeue(pending) : this.inlineResponse();
     }
   }
 }

@@ -212,6 +212,38 @@ async function ensureWebhook() {
   }
 }
 
+const POLL_TIMEOUT_S = 20;
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+async function pollLoop() {
+  const bot = require('./bot');
+  let webhookCleared = false;
+  let offset = Number(store.getCursor('tg_offset')) || 0;
+  for (;;) {
+    try {
+      if (!webhookCleared) {
+        await tg.call('deleteWebhook', { drop_pending_updates: false });
+        webhookCleared = true;
+        console.log('[telegram] режим long polling');
+      }
+      const updates = await tg.call(
+        'getUpdates',
+        { offset, timeout: POLL_TIMEOUT_S, allowed_updates: ['message', 'callback_query'] },
+        { timeoutMs: (POLL_TIMEOUT_S + 40) * 1000 }
+      );
+      for (const u of updates) {
+        offset = u.update_id + 1;
+        store.setCursor('tg_offset', offset);
+        bot.processUpdate(u).catch((e) => console.error('[telegram] update:', e?.message || e));
+      }
+    } catch (e) {
+      if (!e.network) console.error('[telegram] getUpdates:', e.message);
+      if (e.code === 409) webhookCleared = false;
+      await sleep(e.network ? 1000 : 3000);
+    }
+  }
+}
+
 function start() {
   if (started) return;
   started = true;
@@ -239,9 +271,13 @@ function start() {
       console.error('[telegram] summary:', e.message);
     }
   }, SUMMARY_MS);
-  setInterval(() => ensureWebhook().catch(() => {}), WEBHOOK_MS);
-  ensureWebhook().catch(() => {});
-  console.log('[telegram] бот запущен');
+  if (c.mode === 'polling') {
+    pollLoop().catch((e) => console.error('[telegram] poll loop stopped:', e?.message || e));
+  } else {
+    setInterval(() => ensureWebhook().catch(() => {}), WEBHOOK_MS);
+    ensureWebhook().catch(() => {});
+  }
+  console.log(`[telegram] бот запущен (${c.mode})`);
 }
 
 module.exports = { start, pollEvents, drainOutbox, tickSummary, push, ensureWebhook };

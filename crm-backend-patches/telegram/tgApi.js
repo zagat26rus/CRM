@@ -1,4 +1,22 @@
 const { cfg } = require('./config');
+const { createDirectTransport } = require('./directTransport');
+
+let direct = null;
+function directTransport() {
+  if (!direct) direct = createDirectTransport(cfg().apiIps);
+  return direct;
+}
+
+const RETRIABLE_RESET = new Set(['ECONNRESET', 'EPIPE']);
+
+async function directSend(path, opts) {
+  try {
+    return await directTransport().request(path, opts);
+  } catch (e) {
+    if (!RETRIABLE_RESET.has(e.code)) throw e;
+    return directTransport().request(path, opts);
+  }
+}
 
 class TgError extends Error {
   constructor(message, { code = 0, network = false } = {}) {
@@ -27,51 +45,79 @@ function headers(extra = {}) {
   return relayKey ? { 'x-relay-key': relayKey, ...extra } : extra;
 }
 
-async function call(method, payload = {}, { timeoutMs = 12000 } = {}) {
+function fail(label, e) {
+  const c = cfg();
+  if (!c.direct) downUntil = Date.now() + BREAKER_MS;
+  lastError = `${label}: ${e?.cause?.code || e?.code || e?.name || 'network error'}`;
+  return new TgError(lastError, { network: true });
+}
+
+async function call(method, payload = {}, { timeoutMs = 30000 } = {}) {
   const c = cfg();
   if (!c.token) throw new TgError('Токен бота не задан', { network: true });
-  const url = `${c.apiBase}/bot${c.token}/${method}`;
-  let res;
+  const body = JSON.stringify(payload);
+  let status;
+  let text;
   try {
-    res = await fetch(url, {
-      method: 'POST',
-      headers: headers({ 'Content-Type': 'application/json' }),
-      body: JSON.stringify(payload),
-      signal: AbortSignal.timeout(timeoutMs),
-    });
+    if (c.direct) {
+      const r = await directSend(`/bot${c.token}/${method}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) },
+        body,
+        timeoutMs,
+      });
+      status = r.status;
+      text = r.body.toString('utf8');
+    } else {
+      const res = await fetch(`${c.apiBase}/bot${c.token}/${method}`, {
+        method: 'POST',
+        headers: headers({ 'Content-Type': 'application/json' }),
+        body,
+        signal: AbortSignal.timeout(timeoutMs),
+      });
+      status = res.status;
+      text = await res.text();
+    }
   } catch (e) {
-    downUntil = Date.now() + BREAKER_MS;
-    lastError = `${method}: ${e?.cause?.code || e?.name || 'network error'}`;
-    throw new TgError(lastError, { network: true });
+    throw fail(method, e);
   }
   let data = null;
   try {
-    data = await res.json();
+    data = JSON.parse(text);
   } catch {
-    downUntil = Date.now() + BREAKER_MS;
-    lastError = `${method}: bad response (${res.status})`;
-    throw new TgError(lastError, { network: true, code: res.status });
+    if (!c.direct) downUntil = Date.now() + BREAKER_MS;
+    lastError = `${method}: bad response (${status})`;
+    throw new TgError(lastError, { network: true, code: status });
   }
   downUntil = 0;
   lastOkAt = Date.now();
   lastError = '';
-  if (!data.ok) throw new TgError(data.description || `Telegram error ${res.status}`, { code: data.error_code || res.status });
+  if (!data.ok) throw new TgError(data.description || `Telegram error ${status}`, { code: data.error_code || status });
   return data.result;
 }
 
-async function downloadFile(filePath, { timeoutMs = 30000 } = {}) {
+async function downloadFile(filePath, { timeoutMs = 60000 } = {}) {
   const c = cfg();
-  const url = `${c.apiBase}/file/bot${c.token}/${filePath}`;
-  let res;
+  let status;
+  let buf;
   try {
-    res = await fetch(url, { headers: headers(), signal: AbortSignal.timeout(timeoutMs) });
+    if (c.direct) {
+      const r = await directSend(`/file/bot${c.token}/${filePath}`, { method: 'GET', timeoutMs });
+      status = r.status;
+      buf = r.body;
+    } else {
+      const res = await fetch(`${c.apiBase}/file/bot${c.token}/${filePath}`, {
+        headers: headers(),
+        signal: AbortSignal.timeout(timeoutMs),
+      });
+      status = res.status;
+      buf = Buffer.from(await res.arrayBuffer());
+    }
   } catch (e) {
-    downUntil = Date.now() + BREAKER_MS;
-    lastError = `file: ${e?.cause?.code || e?.name || 'network error'}`;
-    throw new TgError(lastError, { network: true });
+    throw fail('file', e);
   }
-  if (!res.ok) throw new TgError(`Не удалось скачать файл (${res.status})`, { code: res.status });
-  return Buffer.from(await res.arrayBuffer());
+  if (status < 200 || status >= 300) throw new TgError(`Не удалось скачать файл (${status})`, { code: status });
+  return buf;
 }
 
 module.exports = { call, downloadFile, isUp, health, TgError };
