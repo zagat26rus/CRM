@@ -1307,6 +1307,7 @@ function EditOrderModal({
       model: form.model,
       problemName: lookupName,
       problemId: matchedProblem?.id,
+      partType: 'original',
     })
     if (result) {
       setForm((prev) => ({
@@ -1797,24 +1798,9 @@ function OrderModal({
     imei: '', serialNumber: '', equipment: '', devicePassword: '',
     prepayment: '', estimatedPrice: '',
     managerName: '', executorName: '', dueAt: '', isUrgent: false, receiverNotes: '',
-    inspection: {
-      dirt: [],
-      scratches: [],
-      chips: [],
-      wear: [],
-      cracks: [],
-      integrity: '',
-      software: '',
-      temperature: '',
-      opErrors: '',
-      other: ''
-    },
-    wishes: {
-      loaner: '',
-      storage: '',
-      pickupAddress: 'г. Ставрополь, ул. Мимоз, д. 26/1',
-      prepaymentWish: ''
-    },
+    partType: 'original' as 'original' | 'copy',
+    inspection: {} as Record<string, any>,
+    wishes: {} as Record<string, any>,
     status: 'Создана',
     price: '', costPrice: '', description: '', warranty: false, onSite: false, paymentMethod: 'cash'
   });
@@ -1867,6 +1853,28 @@ function OrderModal({
     setForm((prev) => ({ ...prev, description: value }))
     const inList = catalog.subtypeNames.some((o) => o.toLowerCase() === value.trim().toLowerCase())
     if (inList && value.trim() && form.problem.trim()) void applyCatalogPrice(form.problem, value)
+  }
+
+  const handlePartTypeChange = (value: string) => {
+    const partType = value === 'copy' ? 'copy' : 'original'
+    setForm((prev) => ({ ...prev, partType }))
+    if (form.problem.trim()) {
+      void fetchCatalogPrice({
+        brand: form.brand,
+        model: form.model,
+        problemName: (form.description || form.problem).trim(),
+        partType,
+      }).then((result) => {
+        if (!result) return
+        setForm((prev) => ({
+          ...prev,
+          partType,
+          price: String(result.priceMin),
+          costPrice: String(result.costPrice),
+          estimatedPrice: prev.estimatedPrice || String(result.priceMin),
+        }))
+      })
+    }
   }
 
   // Состояние для выбора клиента
@@ -2130,11 +2138,13 @@ function OrderModal({
                 issue={form.problem}
                 issueSubtype={form.description || ''}
                 issueOptions={issueOptions}
+                partType={form.partType}
                 onDeviceTypeChange={(deviceType) => setForm((prev) => ({ ...prev, deviceType }))}
                 onBrandChange={(brand) => setForm((prev) => ({ ...prev, brand }))}
                 onModelChange={(model) => setForm((prev) => ({ ...prev, model }))}
                 onIssueChange={handleIssueChange}
                 onIssueSubtypeChange={handleIssueSubtypeChange}
+                onPartTypeChange={handlePartTypeChange}
               />
             </div>
 
@@ -2217,118 +2227,6 @@ function OrderModal({
                 placeholder='Заметки приемщика...'
                 rows={2}
               />
-            </div>
-
-            <div className='md:col-span-2 p-3 bg-surface rounded-xl border border-border'>
-              <div className='font-semibold mb-2'>Состояние устройства (для квитанции)</div>
-              <div className='grid grid-cols-1 md:grid-cols-2 gap-3'>
-                {([
-                  ['dirt', 'Загрязнения'],
-                  ['scratches', 'Царапины'],
-                  ['chips', 'Сколы'],
-                  ['wear', 'Потертости'],
-                  ['cracks', 'Трещины']
-                ] as const).map(([key, label]) => {
-                  const options = ['не указано', 'по всей поверхности', 'верхняя часть', 'нижняя часть', 'левая сторона', 'правая сторона', 'точечно'] as const
-                  const current: string[] = (form as any).inspection?.[key] || []
-                  return (
-                    <div key={key}>
-                      <div className='label'>{label}</div>
-                      <div className='flex flex-wrap gap-2'>
-                        {options.map((opt) => {
-                          const checked = current.includes(opt)
-                          return (
-                            <label key={opt} className='flex items-center gap-2 cursor-pointer text-xs px-2 py-1 rounded border border-border bg-bg'>
-                              <input
-                                type='checkbox'
-                                checked={checked}
-                                onChange={(e) => {
-                                  const isOn = e.target.checked
-                                  setForm((prev: any) => {
-                                    const next = { ...(prev.inspection || {}) }
-                                    const arr = Array.isArray(next[key]) ? [...next[key]] : []
-                                    const idx = arr.indexOf(opt)
-                                    if (isOn && idx === -1) arr.push(opt)
-                                    if (!isOn && idx >= 0) arr.splice(idx, 1)
-                                    // если выбрали "не указано" — оставляем только его
-                                    if (opt === 'не указано' && isOn) next[key] = ['не указано']
-                                    else {
-                                      next[key] = arr.filter((x) => x !== 'не указано')
-                                      if (next[key].length === 0) next[key] = ['не указано']
-                                    }
-                                    return { ...prev, inspection: next }
-                                  })
-                                }}
-                              />
-                              <span>{opt}</span>
-                            </label>
-                          )
-                        })}
-                      </div>
-                    </div>
-                  )
-                })}
-
-                {([
-                  ['integrity', 'Целостность'],
-                  ['software', 'Корректность работы ПО'],
-                  ['temperature', 'Температура'],
-                  ['opErrors', 'Операционные ошибки'],
-                  ['other', 'Иное']
-                ] as const).map(([key, label]) => (
-                  <div key={key}>
-                    <label className='label'>{label}</label>
-                    <input
-                      className='input'
-                      value={String((form as any).inspection?.[key] || '')}
-                      onChange={(e) => setForm((prev: any) => ({ ...prev, inspection: { ...(prev.inspection || {}), [key]: e.target.value } }))}
-                      placeholder='не указано'
-                    />
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className='md:col-span-2 p-3 bg-surface rounded-xl border border-border'>
-              <div className='font-semibold mb-2'>Пожелания клиента (для квитанции)</div>
-              <div className='grid grid-cols-1 md:grid-cols-2 gap-3'>
-                <div className='md:col-span-2'>
-                  <label className='label'>Пожелания клиента по выдаче подменного телефона</label>
-                  <input
-                    className='input'
-                    value={String((form as any).wishes?.loaner || '')}
-                    onChange={(e) => setForm((prev: any) => ({ ...prev, wishes: { ...(prev.wishes || {}), loaner: e.target.value } }))}
-                    placeholder='не указано'
-                  />
-                </div>
-                <div className='md:col-span-2'>
-                  <label className='label'>Пожелания клиента по хранению устройства/техники</label>
-                  <input
-                    className='input'
-                    value={String((form as any).wishes?.storage || '')}
-                    onChange={(e) => setForm((prev: any) => ({ ...prev, wishes: { ...(prev.wishes || {}), storage: e.target.value } }))}
-                    placeholder='не указано'
-                  />
-                </div>
-                <div className='md:col-span-2'>
-                  <label className='label'>Пожелания клиента по адресу выдачи</label>
-                  <input
-                    className='input'
-                    value={String((form as any).wishes?.pickupAddress || '')}
-                    onChange={(e) => setForm((prev: any) => ({ ...prev, wishes: { ...(prev.wishes || {}), pickupAddress: e.target.value } }))}
-                    placeholder='г. Ставрополь, ул. Мимоз, д. 26/1'
-                  />
-                </div>
-                <div className='md:col-span-2'>
-                  <label className='label'>Пожелания клиента по предоплате</label>
-                  <input
-                    className='input'
-                    value={String((form as any).wishes?.prepaymentWish || '')}
-                    onChange={(e) => setForm((prev: any) => ({ ...prev, wishes: { ...(prev.wishes || {}), prepaymentWish: e.target.value } }))}
-                    placeholder='не указано'
-                  />
-                </div>
-              </div>
             </div>
 
             <div className='md:col-span-2'>
