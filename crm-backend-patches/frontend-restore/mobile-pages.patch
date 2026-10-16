@@ -1,0 +1,30 @@
+Mobile page-specific class changes deployed alongside styles.css.
+
+Payments.tsx
+- Header/actions stack below 640 px.
+- Payment table uses `min-w-[780px] table-auto` inside a local `overflow-auto` wrapper.
+
+Clients.tsx
+- Header, search controls and modal actions stack on narrow screens.
+- Client table uses `min-w-[980px] table-auto` and scrolls inside its card.
+- Detail rows and action groups wrap instead of overlapping.
+
+Tasks.tsx
+- Header/action buttons and search controls use responsive grids.
+- Filter and status tags wrap; task actions move below content on narrow screens.
+
+Services.tsx
+- Tabs use a three-column mobile grid.
+- Catalog filters are full-width on mobile.
+- Catalog table uses `min-w-[980px] table-auto` in local horizontal scrolling.
+
+Inventory.tsx
+- Header filters/actions use a responsive two-column grid.
+- Item actions wrap; the wide stock table remains inside its own scroll container.
+
+Settings.tsx
+- Invite actions stack on mobile and table actions wrap.
+
+Documentation.tsx
+- Tabs/actions use a mobile grid.
+- History table and row actions are contained and independently scrollable.

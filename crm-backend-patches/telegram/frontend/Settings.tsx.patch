@@ -1,0 +1,43 @@
+--- a/front/src/pages/Settings.tsx	2026-10-15 22:21:53.141161366 +0000
++++ b/front/src/pages/Settings.tsx	2026-10-15 22:14:53.454584830 +0000
+@@ -5,6 +5,8 @@
+ import { useToast } from '../utils'
+ import { apiFetch } from '../api'
+ import IntegrationsModal from './IntegrationsModal'
++import InvoiceTemplatesModal from './InvoiceTemplatesModal'
++import TelegramBotModal from './TelegramBotModal'
+ import { invalidateCompanySettingsCache } from '../hooks/useCompanySettings'
+ import { ORDER_STATUSES as DEFAULT_STATUSES } from '../utils/orderStatuses'
+ 
+@@ -32,20 +34,21 @@
+ export default function Settings() {
+   const auth = useAuth()
+   const toast = useToast()
+-  const [panel, setPanel] = useState<null | 'company' | 'profile' | 'staff' | 'integrations' | 'invoices' | 'orders'>(null)
++  const [panel, setPanel] = useState<null | 'company' | 'profile' | 'staff' | 'integrations' | 'telegram' | 'invoices' | 'orders'>(null)
+ 
+   const sections = [
+     { title: 'Компания', items: ['Общее', 'Сотрудники', 'Ваш профиль'] },
+     { title: 'Заказы', items: ['Статусы'] },
+     { title: 'Платежи', items: ['Методы оплаты'] },
+     { title: 'Документы', items: ['Шаблоны квитанций'] },
+-    { title: 'Интеграции', items: ['API и Webhook'] }
++    { title: 'Интеграции', items: ['Telegram-бот', 'API и Webhook'] }
+   ]
+ 
+   const openPanel = (item: string) => {
+     if (item === 'Общее') return setPanel('company')
+     if (item === 'Ваш профиль') return setPanel('profile')
+     if (item === 'Сотрудники') return setPanel('staff')
++    if (item === 'Telegram-бот') return setPanel('telegram')
+     if (item === 'API и Webhook') return setPanel('integrations')
+     if (item === 'Шаблоны квитанций') return setPanel('invoices')
+     if (item === 'Статусы') return setPanel('orders')
+@@ -84,6 +87,7 @@
+ 
+       {panel === 'staff' && <StaffModal onClose={() => setPanel(null)} />}
+       {panel === 'integrations' && <IntegrationsModal onClose={() => setPanel(null)} />}
++      {panel === 'telegram' && <TelegramBotModal onClose={() => setPanel(null)} />}
+       {panel === 'invoices' && <InvoiceTemplatesModal onClose={() => setPanel(null)} />}
+       {panel === 'orders' && <OrderSettingsModal onClose={() => setPanel(null)} />}
+     </div>

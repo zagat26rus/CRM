@@ -78,3 +78,33 @@ export const clientsApi = {
   async list(token:string){ return api.get<Client[]>('/api/clients', token) },
   async add(token:string, c: Partial<Client>){ return api.post<Client>('/api/clients', token, c) }
 }
+
+
+/** Compatibility helpers used by live CRM pages (Shop POS, etc.) */
+export function apiUrl(path: string) {
+  const p = path.startsWith('/') ? path : `/${path}`
+  // live CRM paths are /api/... ; BASE already includes host, may or may not include /api
+  if (p.startsWith('/api/') || BASE.endsWith('/api')) return `${BASE.replace(/\/$/, '')}${p.startsWith('/api') && BASE.endsWith('/api') ? p.slice(4) : p}`
+  return `${BASE.replace(/\/$/, '')}/api${p}`
+}
+
+function readAuthToken(): string | null {
+  try {
+    const raw = localStorage.getItem('authToken')
+    if (raw) return raw
+    const persisted = localStorage.getItem('fixnet-auth')
+    if (persisted) {
+      const parsed = JSON.parse(persisted)
+      return parsed?.state?.token || null
+    }
+  } catch {}
+  return null
+}
+
+export async function apiFetch(input: string, init: RequestInit = {}) {
+  const url = input.startsWith('http://') || input.startsWith('https://') ? input : apiUrl(input)
+  const token = readAuthToken()
+  const headers = new Headers(init.headers || {})
+  if (token && !headers.has('Authorization')) headers.set('Authorization', `Bearer ${token}`)
+  return fetch(url, { ...init, headers })
+}

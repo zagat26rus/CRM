@@ -125,7 +125,7 @@ export default function OrderForm({ onClose, onSave }: Props){
 
           <label className='block md:col-span-2'>
             <span className='label'>Комментарий</span>
-            <Textarea rows={3} value={(form as any).comment||''} onChange={e=>setForm({...form, comment:(e.target as any).value})} placeholder='Дополнительно'/>
+            <Textarea rows={3} value={(form as any).comment||''} onChange={e=>setForm({...form, comment:(e.target as any).value} as any)} placeholder='Дополнительно'/>
           </label>
         </div>
 
