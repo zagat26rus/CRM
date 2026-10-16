@@ -297,7 +297,7 @@ export default function Documentation() {
           inspection: form.inspection,
           wishes: form.wishes,
           documentNumber: docMeta.documentNumber,
-          status: 'Новый',
+          status: 'Создана',
           price: Number(form.estimatedPrice) || 0,
           costPrice: Number(form.costPrice) || 0
         }
