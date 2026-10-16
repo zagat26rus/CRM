@@ -49,6 +49,8 @@ export default function App(){
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const loc = useLocation()
   const auth = useAuth()
+  const bottomRoutes = ['/orders', '/tasks', '/clients', '/payments']
+  const moreActive = !bottomRoutes.includes(loc.pathname)
   useEffect(()=>{ document.title = 'FixNet CRM — ' + (menu.find(m => m.to === loc.pathname)?.label || '') },[loc.pathname])
   useEffect(() => { auth.bootstrap() }, [])
   
@@ -76,7 +78,7 @@ export default function App(){
   }
 
   return (
-    <div className='min-h-[100dvh] flex bg-bg text-text pt-[env(safe-area-inset-top)]'>
+    <div className='min-h-[100dvh] w-full max-w-full overflow-x-clip flex bg-bg text-text pt-[env(safe-area-inset-top)]'>
       {/* Desktop Sidebar */}
       {!isAuthRoute && (
       <aside className={'hidden lg:flex flex-col w-60 border-r border-border bg-bg/70'}>
@@ -107,7 +109,7 @@ export default function App(){
 
       {/* Mobile Sidebar Drawer */}
       {!isAuthRoute && (
-        <aside className={`fixed top-0 left-0 h-full w-64 bg-bg border-r border-border z-50 transform transition-transform duration-300 ease-in-out lg:hidden ${
+        <aside className={`fixed top-[env(safe-area-inset-top)] bottom-0 left-0 w-[min(18rem,88vw)] bg-bg border-r border-border z-50 transform transition-transform duration-300 ease-in-out lg:hidden flex flex-col ${
           mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'
         }`}>
           <div className='h-14 border-b border-border flex items-center justify-between px-4 font-bold'>
@@ -136,7 +138,7 @@ export default function App(){
       )}
 
       {/* Main */}
-      <main className='flex-1 min-w-0'>
+      <main className='flex-1 min-w-0 w-full max-w-full overflow-x-clip pt-14 lg:pt-0'>
         {!isAuthRoute && <Topbar refreshKey={loc.pathname} onMenuClick={() => setMobileMenuOpen(true)} />}
         <div className='container-page pb-[calc(5rem+env(safe-area-inset-bottom))] lg:pb-8'>
           <Routes>
@@ -193,7 +195,7 @@ export default function App(){
               type='button'
               onClick={() => setMobileMenuOpen(true)}
               className={`flex flex-col items-center justify-center flex-1 h-full min-h-11 transition ${
-                mobileMenuOpen ? 'text-primary' : 'text-muted'
+                mobileMenuOpen || moreActive ? 'text-primary' : 'text-muted'
               }`}
             >
               <span className='text-lg leading-none mb-0.5' aria-hidden>⋯</span>
@@ -239,9 +241,9 @@ function Topbar({ refreshKey, onMenuClick }: { refreshKey: string; onMenuClick: 
   }, [refreshKey])
 
   return (
-    <div className='h-14 border-b border-border flex items-center justify-between px-3 md:px-4 sticky top-0 bg-bg/80 backdrop-blur z-40'>
+    <div className='h-14 border-b border-border flex items-center justify-between gap-2 px-2.5 md:px-4 fixed top-[env(safe-area-inset-top)] left-0 right-0 lg:sticky lg:top-0 bg-bg/95 backdrop-blur z-40'>
       {/* Mobile: Menu button + Logo */}
-      <div className='flex items-center gap-3 lg:hidden'>
+      <div className='flex items-center gap-1.5 shrink-0 lg:hidden'>
         <button 
           onClick={onMenuClick}
           className='p-2 hover:bg-surface rounded-lg transition touch-manipulation'
@@ -251,7 +253,7 @@ function Topbar({ refreshKey, onMenuClick }: { refreshKey: string; onMenuClick: 
             <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M4 6h16M4 12h16M4 18h16' />
           </svg>
         </button>
-        <span className='font-bold text-sm'>
+        <span className='font-bold text-sm whitespace-nowrap'>
           <span className='text-primary'>FixNet</span>&nbsp;CRM
         </span>
       </div>
@@ -263,13 +265,13 @@ function Topbar({ refreshKey, onMenuClick }: { refreshKey: string; onMenuClick: 
       </div>
 
       {/* Mobile: Balance (compact) */}
-      <div className='flex lg:hidden items-center gap-1.5'>
-        <span className='text-xs text-muted'>Баланс:</span>
-        <span className='font-semibold text-sm'>{(balance ?? 0).toLocaleString('ru-RU')} ₽</span>
+      <div className='flex lg:hidden min-w-0 flex-1 justify-center items-center gap-1'>
+        <span className='hidden min-[390px]:inline text-[11px] text-muted'>Баланс:</span>
+        <span className='font-semibold text-xs min-[390px]:text-sm truncate'>{(balance ?? 0).toLocaleString('ru-RU')} ₽</span>
       </div>
 
       {/* Right side actions */}
-      <div className='flex items-center gap-2'>
+      <div className='flex items-center gap-1.5 shrink-0'>
         <GlobalSearch />
         <button type='button' className='btn secondary hidden md:inline-flex text-sm px-3 py-2' onClick={() => navigate('/help')}>
           Справка

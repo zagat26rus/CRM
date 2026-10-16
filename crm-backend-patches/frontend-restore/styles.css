@@ -1,0 +1,198 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --scrollbar: #2a2b31;
+  --scrollbar-thumb: #3b3d45;
+  --mobile-topbar-height: 3.5rem;
+  --mobile-nav-height: 3.5rem;
+}
+
+/* Scrollbar */
+html,
+body,
+#root {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: clip;
+}
+
+body {
+  min-height: 100dvh;
+}
+
+* {
+  min-width: 0;
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar);
+}
+*::-webkit-scrollbar { width: 10px; height: 10px; }
+*::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 8px; }
+*::-webkit-scrollbar-track { background: var(--scrollbar); }
+
+/* Reusable classes */
+.container-page {
+  @apply w-full max-w-full p-3 sm:p-6 lg:p-8;
+}
+.card {
+  @apply bg-surface/80 border border-border rounded-xl sm:rounded-2xl shadow-soft;
+}
+.card-inner {
+  @apply p-4 sm:p-5;
+}
+.input, .select, .textarea {
+  @apply bg-bg/70 border border-border rounded-xl px-4 py-3 outline-none focus:border-primary transition w-full text-base sm:text-sm;
+  min-height: 44px;
+}
+.select-native {
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='%23a1a1aa'%3E%3Cpath fill-rule='evenodd' d='M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 111.06 1.06l-4.24 4.25a.75.75 0 01-1.06 0L5.21 8.29a.75.75 0 01.02-1.08z' clip-rule='evenodd'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.75rem center;
+  background-size: 1rem;
+  padding-right: 2.5rem;
+}
+.label { @apply text-xs text-muted mb-2 block; }
+.badge { @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs; }
+.btn {
+  @apply inline-flex items-center justify-center gap-2 rounded-xl sm:rounded-2xl px-4 py-3 sm:py-2.5 bg-primary text-black font-medium hover:bg-primary-600 transition;
+  min-height: 44px; /* Минимальный размер для touch */
+  touch-action: manipulation; /* Убираем задержку на мобильных */
+}
+.btn.secondary { @apply bg-surface text-text border border-border hover:bg-surface/70; }
+.btn.ghost { @apply bg-transparent border border-border hover:bg-surface/50 text-text; }
+.btn.icon { @apply px-3 py-3 sm:px-2.5 sm:py-2; min-height: 44px; }
+.btn.lg { @apply px-5 py-4 sm:py-3 text-base; min-height: 48px; }
+.table {
+  @apply w-full text-sm;
+  border-collapse: collapse;
+}
+.table th {
+  @apply text-left font-semibold text-muted py-3 px-3 sticky top-0 bg-bg z-10;
+}
+.table td {
+  @apply py-3 px-3 border-t border-border;
+  overflow-wrap: anywhere;
+}
+.tag {
+  @apply text-xs px-2 py-1 rounded bg-surface border border-border text-text transition;
+}
+.tag-active {
+  @apply bg-primary text-black border-primary font-medium;
+}
+.link { @apply text-primary hover:underline; }
+.modal-overlay { 
+  @apply fixed inset-0 bg-black/60 backdrop-blur-sm flex items-start sm:items-center justify-center p-4 z-50;
+  /* Даем возможность скроллить модалку, если она выше экрана */
+  @apply overflow-y-auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+}
+.modal { 
+  @apply card w-full max-w-5xl;
+  /* На мобильных модальное окно занимает почти весь экран */
+  @apply max-h-[90vh] overflow-y-auto;
+  @apply sm:max-h-[85vh];
+}
+.modal-panel {
+  @apply card w-full;
+  @apply max-h-[90vh] overflow-y-auto;
+  @apply sm:max-h-[85vh];
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+}
+.modal-title { @apply text-lg sm:text-xl font-semibold; }
+.grid-2 { @apply grid grid-cols-1 sm:grid-cols-2 gap-4; }
+.grid-3 { @apply grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4; }
+hr.divider { @apply border-border; }
+.toast {
+  @apply bg-surface border border-border text-text px-4 py-3 rounded-xl shadow-soft;
+  max-width: calc(100vw - 2rem);
+}
+.list-card {
+  @apply rounded-2xl border border-border bg-surface/80 p-4 space-y-2;
+}
+
+.mobile-scroll-x {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+@media (max-width: 767px) {
+  .container-page {
+    padding-top: 0.75rem;
+  }
+
+  .card-inner {
+    padding: 0.875rem;
+  }
+
+  .mobile-table,
+  .overflow-auto,
+  .overflow-x-auto {
+    max-width: 100%;
+    overscroll-behavior-inline: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .table {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    overflow-x: auto;
+    table-layout: auto !important;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .table > thead,
+  .table > tbody {
+    display: table;
+    width: 42rem;
+    table-layout: auto;
+  }
+
+  .table th,
+  .table td {
+    min-width: 7rem;
+    white-space: normal !important;
+    vertical-align: top;
+  }
+
+  .table th:first-child,
+  .table td:first-child {
+    min-width: 6rem;
+  }
+
+  .table button,
+  .table .btn {
+    white-space: nowrap;
+  }
+
+  .modal-overlay {
+    padding: max(0.5rem, env(safe-area-inset-top)) 0.5rem
+      max(0.5rem, env(safe-area-inset-bottom));
+  }
+
+  .modal,
+  .modal-panel {
+    max-width: calc(100dvw - 1rem);
+    max-height: calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 1rem);
+  }
+
+  h1,
+  h2,
+  h3,
+  p,
+  td,
+  th,
+  button,
+  a,
+  span {
+    overflow-wrap: anywhere;
+  }
+}
