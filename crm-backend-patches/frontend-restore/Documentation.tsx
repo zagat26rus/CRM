@@ -768,11 +768,11 @@ export default function Documentation() {
     <div className='space-y-4'>
       <div className='flex flex-wrap items-center justify-between gap-3'>
         <h1 className='text-xl font-bold'>Документация</h1>
-        <div className='flex gap-2 flex-wrap'>
+        <div className='grid grid-cols-2 sm:flex gap-2 sm:flex-wrap w-full sm:w-auto'>
           {(['new', 'history', 'templates'] as Tab[]).map((t) => (
             <button
               key={t}
-              className={'btn ' + (tab === t ? 'btn-primary' : 'btn-ghost')}
+              className={'btn w-full sm:w-auto ' + (tab === t ? 'btn-primary' : 'btn-ghost')}
               onClick={() => t === 'templates' ? setShowTemplates(true) : t === 'new' ? openNewDocumentTab() : setTab(t)}
             >
               {t === 'new' ? 'Новый документ' : t === 'history' ? 'История' : 'Шаблоны'}
@@ -781,7 +781,7 @@ export default function Documentation() {
           {tab === 'history' && (
             <button
               type='button'
-              className='btn btn-ghost'
+              className='btn btn-ghost col-span-2 sm:w-auto'
               disabled={selectedHistory.size === 0 || loadingHistory}
               onClick={() => void deleteSelectedHistory()}
             >
@@ -1036,9 +1036,9 @@ export default function Documentation() {
       )}
 
       {tab === 'history' && (
-        <div className='card overflow-auto'>
+        <div className='card overflow-hidden'>
           {loadingHistory ? <div className='p-4 text-muted'>Загрузка…</div> : (
-            <table className='table'>
+            <table className='table min-w-[980px]'>
               <thead>
                 <tr>
                   <th className='w-10'>
@@ -1078,11 +1078,13 @@ export default function Documentation() {
                       {revenue > 0 || cost > 0 ? `${profit.toLocaleString('ru-RU')} ₽` : '—'}
                     </td>
                     <td>{r.status || '—'}</td>
-                    <td className='space-x-2 whitespace-nowrap'>
-                      <button type='button' className='btn btn-ghost text-sm' onClick={() => openHistoryItem(r)}>Открыть</button>
-                      <button type='button' className='btn btn-ghost text-sm' onClick={() => void printHistoryItem(r)}>Печать</button>
-                      <button type='button' className='btn btn-primary text-sm' onClick={() => void saveHistoryItem(r)}>Сохранить</button>
-                      <button type='button' className='btn btn-ghost text-sm' onClick={() => void deleteHistoryRows([r])}>Удалить</button>
+                    <td>
+                      <div className='flex flex-wrap gap-2'>
+                        <button type='button' className='btn btn-ghost text-sm' onClick={() => openHistoryItem(r)}>Открыть</button>
+                        <button type='button' className='btn btn-ghost text-sm' onClick={() => void printHistoryItem(r)}>Печать</button>
+                        <button type='button' className='btn btn-primary text-sm' onClick={() => void saveHistoryItem(r)}>Сохранить</button>
+                        <button type='button' className='btn btn-ghost text-sm' onClick={() => void deleteHistoryRows([r])}>Удалить</button>
+                      </div>
                     </td>
                   </tr>
                 )})}
