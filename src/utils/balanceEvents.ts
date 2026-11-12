@@ -1,5 +1,5 @@
+export const BALANCE_CHANGED_EVENT = 'crm:balance-changed'
+
 export function notifyBalanceChanged() {
-  try {
-    window.dispatchEvent(new CustomEvent('fixnet:balance-changed'))
-  } catch {}
+  window.dispatchEvent(new CustomEvent(BALANCE_CHANGED_EVENT))
 }

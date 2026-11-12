@@ -1,4 +1,5 @@
-import { InputHTMLAttributes, TextareaHTMLAttributes } from 'react'
+import { ComponentProps, InputHTMLAttributes, TextareaHTMLAttributes } from 'react'
+import Select from './Select'
 
 export function Field({label, required, children}:{label:string; required?:boolean; children:any}){
   return (
@@ -17,11 +18,10 @@ export function Textarea(props: TextareaHTMLAttributes<HTMLTextAreaElement>){
   return <textarea {...props} className={'textarea min-h-24 ' + (props.className||'')} />
 }
 
-export function Select({options, ...rest}:{options:{value:string;label:string}[]} & InputHTMLAttributes<HTMLSelectElement>){
+export function SelectField({options, ...rest}:{options:{value:string;label:string}[]} & Omit<ComponentProps<typeof Select>, 'children'>){
   return (
-    <select {...rest as any} className={'select ' + (rest.className||'')}>
-      <option value='' hidden>Выберите значение</option>
-      {options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-    </select>
+    <Select {...rest} options={[{ value: '', label: 'Выберите значение' }, ...options]} />
   )
 }
+
+export { Select }

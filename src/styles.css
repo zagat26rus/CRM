@@ -2,9 +2,43 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
+:root,
+[data-theme='dark'] {
+  --color-bg: 14 15 16;
+  --color-surface: 20 21 24;
+  --color-border: 31 32 36;
+  --color-text: 231 231 234;
+  --color-muted: 161 161 170;
+  --color-primary: 245 196 0;
+  --color-primary-600: 229 183 0;
+  --color-primary-700: 200 159 0;
+  --color-primary-800: 158 126 0;
+  --color-success: 35 197 94;
+  --color-danger: 239 68 68;
+  --color-warning: 245 158 11;
+  --shadow-soft: 0 8px 24px rgba(0, 0, 0, 0.35);
   --scrollbar: #2a2b31;
   --scrollbar-thumb: #3b3d45;
+  color-scheme: dark;
+}
+
+[data-theme='light'] {
+  --color-bg: 243 244 246;
+  --color-surface: 255 255 255;
+  --color-border: 226 228 232;
+  --color-text: 20 21 26;
+  --color-muted: 107 114 128;
+  --color-primary: 230 184 0;
+  --color-primary-600: 212 169 0;
+  --color-primary-700: 184 146 0;
+  --color-primary-800: 143 114 0;
+  --color-success: 22 163 74;
+  --color-danger: 220 38 38;
+  --color-warning: 217 119 6;
+  --shadow-soft: 0 8px 24px rgba(15, 23, 42, 0.08);
+  --scrollbar: #e5e7eb;
+  --scrollbar-thumb: #c4c7ce;
+  color-scheme: light;
 }
 
 /* Scrollbar */
@@ -18,45 +52,90 @@
 
 /* Reusable classes */
 .container-page {
-  @apply p-6 lg:p-8;
+  @apply p-4 sm:p-6 lg:p-8;
 }
 .card {
-  @apply bg-surface/80 border border-border rounded-2xl shadow-soft;
+  @apply bg-surface/80 border border-border rounded-xl sm:rounded-2xl shadow-soft;
 }
 .card-inner {
-  @apply p-5;
+  @apply p-4 sm:p-5;
 }
 .input, .select, .textarea {
-  @apply bg-bg/70 border border-border rounded-xl px-4 py-3 outline-none focus:border-primary transition w-full text-sm;
+  @apply bg-bg/70 border border-border rounded-xl px-4 py-3 outline-none focus:border-primary transition w-full text-base sm:text-sm;
+  min-height: 44px;
+}
+.select-native {
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='%23a1a1aa'%3E%3Cpath fill-rule='evenodd' d='M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 111.06 1.06l-4.24 4.25a.75.75 0 01-1.06 0L5.21 8.29a.75.75 0 01.02-1.08z' clip-rule='evenodd'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.75rem center;
+  background-size: 1rem;
+  padding-right: 2.5rem;
 }
 .label { @apply text-xs text-muted mb-2 block; }
 .badge { @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs; }
 .btn {
-  @apply inline-flex items-center justify-center gap-2 rounded-2xl px-4 py-2.5 bg-primary text-black font-medium hover:bg-primary-600 transition;
+  @apply inline-flex items-center justify-center gap-2 rounded-xl sm:rounded-2xl px-4 py-3 sm:py-2.5 bg-primary text-black font-medium hover:bg-primary-600 transition;
+  min-height: 44px; /* Минимальный размер для touch */
+  touch-action: manipulation; /* Убираем задержку на мобильных */
 }
 .btn.secondary { @apply bg-surface text-text border border-border hover:bg-surface/70; }
 .btn.ghost { @apply bg-transparent border border-border hover:bg-surface/50 text-text; }
-.btn.icon { @apply px-2.5 py-2; }
-.btn.lg { @apply px-5 py-3 text-base; }
+.btn.icon { @apply px-3 py-3 sm:px-2.5 sm:py-2; min-height: 44px; }
+.btn.lg { @apply px-5 py-4 sm:py-3 text-base; min-height: 48px; }
 .table {
   @apply w-full text-sm;
+  /* Горизонтальная прокрутка на мобильных */
+  display: block;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.table table {
+  @apply w-full min-w-[600px]; /* Минимальная ширина для таблицы */
 }
 .table th {
   @apply text-left font-semibold text-muted py-3 px-3 sticky top-0 bg-bg z-10;
 }
 .table td {
-  @apply py-3 px-3 border-t border-border whitespace-nowrap;
+  @apply py-3 px-3 border-t border-border;
+  /* Убираем whitespace-nowrap на мобильных для лучшей читаемости */
+  @apply sm:whitespace-nowrap;
 }
 .tag {
-  @apply text-xs px-2 py-1 rounded bg-surface border border-border;
+  @apply text-xs px-2 py-1 rounded bg-surface border border-border text-text transition;
+}
+.tag-active {
+  @apply bg-primary text-black border-primary font-medium;
 }
 .link { @apply text-primary hover:underline; }
-.modal-overlay { @apply fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50; }
-.modal { @apply card w-full max-w-5xl; }
-.modal-title { @apply text-xl font-semibold; }
-.grid-2 { @apply grid grid-cols-1 md:grid-cols-2 gap-4; }
-.grid-3 { @apply grid grid-cols-1 md:grid-cols-3 gap-4; }
+.modal-overlay { 
+  @apply fixed inset-0 bg-black/60 backdrop-blur-sm flex items-start sm:items-center justify-center p-4 z-50;
+  /* Даем возможность скроллить модалку, если она выше экрана */
+  @apply overflow-y-auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+}
+.modal { 
+  @apply card w-full max-w-5xl;
+  /* На мобильных модальное окно занимает почти весь экран */
+  @apply max-h-[90vh] overflow-y-auto;
+  @apply sm:max-h-[85vh];
+}
+.modal-panel {
+  @apply card w-full;
+  @apply max-h-[90vh] overflow-y-auto;
+  @apply sm:max-h-[85vh];
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+}
+.modal-title { @apply text-lg sm:text-xl font-semibold; }
+.grid-2 { @apply grid grid-cols-1 sm:grid-cols-2 gap-4; }
+.grid-3 { @apply grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4; }
 hr.divider { @apply border-border; }
 .toast {
   @apply bg-surface border border-border text-text px-4 py-3 rounded-xl shadow-soft;
+  max-width: calc(100vw - 2rem);
+}
+.list-card {
+  @apply rounded-2xl border border-border bg-surface/80 p-4 space-y-2;
 }

@@ -1,5 +1,8 @@
 # CRM backend patches (Black CRM / www.fedfix.ru)
 
+> Архив старых точечных изменений. Не использовать эту папку как источник frontend/backend и не загружать
+> её файлы поверх production. Актуальные исходники находятся в `/src` и `/backend/src`.
+
 Deployed to `/var/www/black-crm/back` on `45.8.230.220`.
 
 ## Changes
@@ -8,8 +11,6 @@ Deployed to `/var/www/black-crm/back` on `45.8.230.220`.
 - `database.js` — migrate `inventory_sales.customer`, `inventory_sales.shopOrderId`.
 - `routes/aiAgent.js` — authenticated multi-turn DeepSeek diagnostics and supplier-backed parts search, plus IMEI/TAC lookup.
 - `routes/orders-device-storage.patch` — persist storage/capacity discovered by IMEI lookup.
-- `frontend-restore/AiAssistant.tsx` — floating diagnostic/parts chat.
-- `frontend-restore/styles.css` and `mobile-pages.patch` — fixed mobile shell and contained wide page content.
 
 DeepSeek uses the existing `aiPartsSearch.llm` company settings. Optional external IMEI lookup is configured with
 `IMEI_LOOKUP_URL` and `IMEI_LOOKUP_KEY`; without it, the route uses the local `imei_tac` table and reports when a
