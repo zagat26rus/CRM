@@ -367,6 +367,8 @@ function migrateLegacySchema() {
   db.exec(`CREATE INDEX IF NOT EXISTS idx_cash_registers_companyId ON cash_registers(companyId);`);
 
   addColumnIfMissing('payments', 'cashRegisterId INTEGER DEFAULT NULL');
+  addColumnIfMissing('payments', 'transferGroupId TEXT DEFAULT NULL');
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_payments_transferGroupId ON payments(transferGroupId);`);
   addColumnIfMissing('inventory_items', 'imei TEXT DEFAULT ""');
   addColumnIfMissing('inventory_items', 'imei2 TEXT DEFAULT ""');
   addColumnIfMissing('inventory_items', 'serialNumber TEXT DEFAULT ""');

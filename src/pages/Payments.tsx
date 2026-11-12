@@ -43,6 +43,7 @@ export default function Payments(){
   const [rows, setRows] = useState<Tx[]>([])
   const [balance, setBalance] = useState(0)
   const [open, setOpen] = useState<null | ('Приход' | 'Расход')>(null)
+  const [transferOpen, setTransferOpen] = useState(false)
   const [editing, setEditing] = useState<Tx | null>(null)
   const [loading, setLoading] = useState(true)
   const [filterType, setFilterType] = useState('')
@@ -57,7 +58,12 @@ export default function Payments(){
   const [modalCategory, setModalCategory] = useState<string>('')
   const [modalMethod, setModalMethod] = useState<string>('card')
   const [modalRegister, setModalRegister] = useState<number | ''>('')
-  const { defaultId: defaultRegisterId } = useCashRegisters()
+  const [transferFrom, setTransferFrom] = useState<number | ''>('')
+  const [transferTo, setTransferTo] = useState<number | ''>('')
+  const [transferSum, setTransferSum] = useState('')
+  const [transferComment, setTransferComment] = useState('')
+  const [transferSaving, setTransferSaving] = useState(false)
+  const { registers, defaultId: defaultRegisterId, reload: reloadRegisters } = useCashRegisters()
   
   // Данные для выпадающих списков
   const [categories, setCategories] = useState<Category[]>([])
@@ -66,6 +72,16 @@ export default function Payments(){
   useEffect(() => {
     if (!modalRegister && defaultRegisterId) setModalRegister(defaultRegisterId)
   }, [defaultRegisterId, modalRegister])
+
+  useEffect(() => {
+    if (!transferOpen) return
+    const active = registers.filter((r) => r.isActive !== false)
+    if (!transferFrom && active[0]) setTransferFrom(active[0].id)
+    if (!transferTo && active.length > 1) {
+      const other = active.find((r) => r.id !== (transferFrom || active[0]?.id))
+      if (other) setTransferTo(other.id)
+    }
+  }, [transferOpen, registers, transferFrom, transferTo])
 
   useEffect(() => {
     loadPayments();
@@ -338,6 +354,14 @@ async function addTx(
               >
                 <span>Расход</span>
               </button>
+              {registers.filter((r) => r.isActive !== false).length >= 2 ? (
+                <button
+                  className='btn secondary flex items-center gap-2 col-span-2 sm:col-span-1'
+                  onClick={() => setTransferOpen(true)}
+                >
+                  <span>Перевод</span>
+                </button>
+              ) : null}
             </>
           )}
         </div>
@@ -454,6 +478,101 @@ async function addTx(
           </div>
         )}
       </div>
+
+      {transferOpen && (
+        <div className='modal-overlay'>
+          <div className='card w-full max-w-md'>
+            <div className='card-inner space-y-4'>
+              <div className='flex justify-between items-center'>
+                <div>
+                  <h2 className='modal-title'>Перевод между кассами</h2>
+                  <p className='text-sm text-muted mt-1'>Списание с одной кассы и зачисление на другую</p>
+                </div>
+                <button
+                  onClick={() => setTransferOpen(false)}
+                  className='w-8 h-8 rounded-full flex items-center justify-center hover:bg-surface/50 transition'
+                >
+                  ✕
+                </button>
+              </div>
+              <CashRegisterSelect
+                value={transferFrom}
+                onChange={setTransferFrom}
+                label='Откуда'
+                showBalance
+              />
+              <CashRegisterSelect
+                value={transferTo}
+                onChange={setTransferTo}
+                label='Куда'
+                showBalance
+              />
+              <div>
+                <label className='label'>Сумма, ₽ *</label>
+                <input
+                  type='number'
+                  className='input'
+                  min={0}
+                  step='0.01'
+                  value={transferSum}
+                  onChange={(e) => setTransferSum(e.target.value)}
+                  placeholder='0'
+                />
+              </div>
+              <div>
+                <label className='label'>Комментарий</label>
+                <input
+                  className='input'
+                  value={transferComment}
+                  onChange={(e) => setTransferComment(e.target.value)}
+                  placeholder='Необязательно'
+                />
+              </div>
+              <div className='flex gap-3 pt-2'>
+                <button className='btn secondary flex-1' onClick={() => setTransferOpen(false)}>
+                  Отмена
+                </button>
+                <button
+                  className='btn flex-1'
+                  disabled={transferSaving || !transferSum || parseFloat(transferSum) <= 0}
+                  onClick={async () => {
+                    const amount = parseFloat(transferSum)
+                    if (!transferFrom || !transferTo) return alert('Выберите кассы')
+                    if (transferFrom === transferTo) return alert('Кассы должны отличаться')
+                    if (!Number.isFinite(amount) || amount <= 0) return alert('Укажите сумму')
+                    setTransferSaving(true)
+                    try {
+                      const res = await apiFetch('/cash-registers/transfer', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                          fromId: transferFrom,
+                          toId: transferTo,
+                          amount,
+                          comment: transferComment.trim() || undefined,
+                        }),
+                      })
+                      const data = await res.json().catch(() => null)
+                      if (!res.ok) throw new Error(data?.error || 'Ошибка перевода')
+                      setTransferOpen(false)
+                      setTransferSum('')
+                      setTransferComment('')
+                      await Promise.all([loadPayments(), loadBalance(), reloadRegisters()])
+                      notifyBalanceChanged()
+                    } catch (e: any) {
+                      alert(e?.message || 'Не удалось перевести')
+                    } finally {
+                      setTransferSaving(false)
+                    }
+                  }}
+                >
+                  {transferSaving ? 'Перевод…' : 'Перевести'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Модальное окно для создания/редактирования платежа */}
       {(open || editing) && (

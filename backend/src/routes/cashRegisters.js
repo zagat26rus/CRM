@@ -1,11 +1,27 @@
 const express = require('express')
+const crypto = require('crypto')
 const router = express.Router()
 const { db, getCurrentTime } = require('../config/database')
 const { requireAuth } = require('../middlewares/auth')
-const { requireManagement } = require('../middlewares/rbac')
+const { requireManagement, requireFinance } = require('../middlewares/rbac')
 const { ensureDefaultRegister } = require('../utils/cashRegisters')
 
 router.use(requireAuth)
+
+function registerBalance(companyId, cashRegisterId) {
+  const row = db
+    .prepare(
+      `
+    SELECT
+      COALESCE(SUM(CASE WHEN type='income' THEN amount ELSE 0 END), 0) AS income,
+      COALESCE(SUM(CASE WHEN type='expense' THEN amount ELSE 0 END), 0) AS expense
+    FROM payments
+    WHERE companyId = ? AND cashRegisterId = ?
+  `
+    )
+    .get(companyId, cashRegisterId)
+  return Number(row?.income || 0) - Number(row?.expense || 0)
+}
 
 function formatRegister(row) {
   return {
@@ -86,6 +102,100 @@ router.post('/', requireManagement, (req, res) => {
   } catch (error) {
     console.error('Ошибка создания кассы:', error)
     res.status(500).json({ error: 'Ошибка создания кассы' })
+  }
+})
+
+router.post('/transfer', requireFinance, (req, res) => {
+  try {
+    ensureDefaultRegister(req.user.companyId)
+    const fromId = Number(req.body?.fromId)
+    const toId = Number(req.body?.toId)
+    const amount = Number(req.body?.amount)
+    const comment = String(req.body?.comment || '').trim()
+    const method = String(req.body?.method || 'cash').trim() || 'cash'
+
+    if (!Number.isFinite(fromId) || fromId <= 0 || !Number.isFinite(toId) || toId <= 0) {
+      return res.status(400).json({ error: 'Укажите кассы перевода' })
+    }
+    if (fromId === toId) {
+      return res.status(400).json({ error: 'Кассы перевода должны отличаться' })
+    }
+    if (!Number.isFinite(amount) || amount <= 0) {
+      return res.status(400).json({ error: 'Введите корректную сумму' })
+    }
+
+    const fromReg = db
+      .prepare('SELECT * FROM cash_registers WHERE id = ? AND companyId = ? AND isActive = 1')
+      .get(fromId, req.user.companyId)
+    const toReg = db
+      .prepare('SELECT * FROM cash_registers WHERE id = ? AND companyId = ? AND isActive = 1')
+      .get(toId, req.user.companyId)
+    if (!fromReg || !toReg) {
+      return res.status(400).json({ error: 'Одна из касс не найдена или отключена' })
+    }
+
+    const fromBalance = registerBalance(req.user.companyId, fromId)
+    if (amount > fromBalance + 1e-9) {
+      return res.status(400).json({
+        error: `Недостаточно средств в «${fromReg.name}». Остаток: ${fromBalance.toLocaleString('ru-RU')} ₽`,
+      })
+    }
+
+    const transferGroupId = crypto.randomUUID()
+    const now = getCurrentTime()
+    const baseComment = comment || `Перевод: ${fromReg.name} → ${toReg.name}`
+    const expenseDesc = `Перевод в «${toReg.name}»${comment ? `: ${comment}` : ''}`
+    const incomeDesc = `Перевод из «${fromReg.name}»${comment ? `: ${comment}` : ''}`
+
+    const insert = db.prepare(`
+      INSERT INTO payments
+        (companyId, amount, type, categoryId, description, date, saleCategory, method, cashRegisterId, transferGroupId, createdAt, updatedAt)
+      VALUES (?, ?, ?, NULL, ?, ?, NULL, ?, ?, ?, ?, ?)
+    `)
+
+    const tx = db.transaction(() => {
+      const expense = insert.run(
+        req.user.companyId,
+        amount,
+        'expense',
+        expenseDesc,
+        now,
+        method,
+        fromId,
+        transferGroupId,
+        now,
+        now
+      )
+      const income = insert.run(
+        req.user.companyId,
+        amount,
+        'income',
+        incomeDesc,
+        now,
+        method,
+        toId,
+        transferGroupId,
+        now,
+        now
+      )
+      return { expenseId: expense.lastInsertRowid, incomeId: income.lastInsertRowid }
+    })
+
+    const result = tx()
+
+    res.status(201).json({
+      ok: true,
+      transferGroupId,
+      amount,
+      comment: baseComment,
+      from: { id: fromReg.id, name: fromReg.name, balance: registerBalance(req.user.companyId, fromId) },
+      to: { id: toReg.id, name: toReg.name, balance: registerBalance(req.user.companyId, toId) },
+      expensePaymentId: result.expenseId,
+      incomePaymentId: result.incomeId,
+    })
+  } catch (error) {
+    console.error('Ошибка перевода между кассами:', error)
+    res.status(500).json({ error: 'Ошибка перевода между кассами' })
   }
 })
 

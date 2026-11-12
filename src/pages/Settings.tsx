@@ -100,10 +100,18 @@ function CashRegistersModal({ onClose }: { onClose: () => void }) {
   const auth = useAuth()
   const toast = useToast()
   const canEdit = ['owner', 'admin'].includes(auth.user?.role || '')
+  const canTransfer = ['owner', 'admin', 'director'].includes(auth.user?.role || '')
   const [rows, setRows] = useState<Array<{ id: number; name: string; type: string; isDefault: boolean; isActive: boolean; balance?: number }>>([])
   const [loading, setLoading] = useState(true)
   const [name, setName] = useState('')
   const [saving, setSaving] = useState(false)
+  const [fromId, setFromId] = useState<number | ''>('')
+  const [toId, setToId] = useState<number | ''>('')
+  const [transferAmount, setTransferAmount] = useState('')
+  const [transferComment, setTransferComment] = useState('')
+  const [transferring, setTransferring] = useState(false)
+
+  const activeRows = rows.filter((r) => r.isActive)
 
   async function load() {
     setLoading(true)
@@ -123,6 +131,15 @@ function CashRegistersModal({ onClose }: { onClose: () => void }) {
     void load()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  useEffect(() => {
+    if (!fromId && activeRows[0]) setFromId(activeRows[0].id)
+    if (!toId && activeRows.length > 1) {
+      const other = activeRows.find((r) => r.id !== (fromId || activeRows[0]?.id))
+      if (other) setToId(other.id)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows])
 
   async function addRegister() {
     if (!canEdit) return
@@ -183,6 +200,36 @@ function CashRegistersModal({ onClose }: { onClose: () => void }) {
     }
   }
 
+  async function doTransfer() {
+    if (!canTransfer) return
+    const amount = Number(transferAmount)
+    if (!fromId || !toId) return toast.push('Выберите кассы')
+    if (!Number.isFinite(amount) || amount <= 0) return toast.push('Укажите сумму')
+    setTransferring(true)
+    try {
+      const res = await apiFetch('/cash-registers/transfer', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fromId,
+          toId,
+          amount,
+          comment: transferComment.trim() || undefined,
+        }),
+      })
+      const data = await res.json().catch(() => null)
+      if (!res.ok) throw new Error(data?.error || 'Ошибка перевода')
+      setTransferAmount('')
+      setTransferComment('')
+      toast.push(`Переведено ${amount.toLocaleString('ru-RU')} ₽`)
+      await load()
+    } catch (e: any) {
+      toast.push(e?.message || 'Не удалось перевести')
+    } finally {
+      setTransferring(false)
+    }
+  }
+
   return (
     <Modal title='Кассы' onClose={onClose}>
       <div className='space-y-4'>
@@ -224,6 +271,60 @@ function CashRegistersModal({ onClose }: { onClose: () => void }) {
             ))}
           </div>
         )}
+
+        {canTransfer && activeRows.length >= 2 ? (
+          <div className='space-y-3 pt-3 border-t border-border'>
+            <div className='font-medium'>Перевод между кассами</div>
+            <div className='grid grid-cols-1 sm:grid-cols-2 gap-2'>
+              <div>
+                <label className='label text-xs'>Откуда</label>
+                <select className='select' value={fromId} onChange={(e) => setFromId(Number(e.target.value) || '')}>
+                  {activeRows.map((r) => (
+                    <option key={r.id} value={r.id} disabled={r.id === toId}>
+                      {r.name} ({(r.balance ?? 0).toLocaleString('ru-RU')} ₽)
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className='label text-xs'>Куда</label>
+                <select className='select' value={toId} onChange={(e) => setToId(Number(e.target.value) || '')}>
+                  {activeRows.map((r) => (
+                    <option key={r.id} value={r.id} disabled={r.id === fromId}>
+                      {r.name} ({(r.balance ?? 0).toLocaleString('ru-RU')} ₽)
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <div className='grid grid-cols-1 sm:grid-cols-2 gap-2'>
+              <div>
+                <label className='label text-xs'>Сумма</label>
+                <input
+                  className='input'
+                  type='number'
+                  min='0'
+                  step='0.01'
+                  value={transferAmount}
+                  onChange={(e) => setTransferAmount(e.target.value)}
+                  placeholder='0'
+                />
+              </div>
+              <div>
+                <label className='label text-xs'>Комментарий</label>
+                <input
+                  className='input'
+                  value={transferComment}
+                  onChange={(e) => setTransferComment(e.target.value)}
+                  placeholder='Необязательно'
+                />
+              </div>
+            </div>
+            <button className='btn secondary w-full sm:w-auto' disabled={transferring} onClick={doTransfer}>
+              {transferring ? 'Перевод…' : 'Перевести'}
+            </button>
+          </div>
+        ) : null}
 
         {canEdit ? (
           <div className='flex flex-col sm:flex-row gap-2 pt-2 border-t border-border'>

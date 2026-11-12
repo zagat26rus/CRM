@@ -18,12 +18,30 @@ export const CLOSED_SUCCESS_STATUS = 'Выдано' as const
 
 export const CLOSED_SUCCESS_STATUSES = ['Выдано', 'Закрыт успешно', 'Закрыт'] as const
 export const CANCELLED_STATUSES = ['Отказ сервиса', 'Отказ клиента', 'Отказ', 'Закрыт неуспешно'] as const
+export const CLOSED_FAILED_STATUSES = ['Закрыт неуспешно', 'Закрыт не успешно'] as const
+
+/** Завершённые / неактивные: выданные, отказы, закрытые */
+export const INACTIVE_ORDER_STATUSES = Array.from(
+  new Set([
+    ...CLOSED_SUCCESS_STATUSES,
+    ...CANCELLED_STATUSES,
+    ...CLOSED_FAILED_STATUSES,
+  ])
+)
 
 export function isClosedSuccessStatus(status: string) {
   return (CLOSED_SUCCESS_STATUSES as readonly string[]).includes(status)
 }
 
+export function isInactiveOrderStatus(status: string) {
+  return INACTIVE_ORDER_STATUSES.includes(status)
+}
+
+/** Серые бейджи для завершённых заказов; цвет только у активных стадий */
 export function getOrderStatusColor(status: string): string {
+  if (isInactiveOrderStatus(status)) {
+    return 'bg-bg border border-border text-muted'
+  }
   switch (status) {
     case 'Создана':
     case 'Новый':
@@ -40,16 +58,6 @@ export function getOrderStatusColor(status: string): string {
     case 'Готово':
     case 'Готов':
       return 'bg-bg border border-emerald-400 text-emerald-400'
-    case 'Выдано':
-    case 'Закрыт успешно':
-    case 'Закрыт':
-      return 'bg-bg border border-success text-success'
-    case 'Отказ сервиса':
-    case 'Отказ клиента':
-    case 'Закрыт неуспешно':
-    case 'Закрыт не успешно':
-    case 'Отказ':
-      return 'bg-bg border border-danger text-danger'
     default:
       return 'bg-bg border border-border text-text'
   }
@@ -66,12 +74,12 @@ export const ORDER_STATUS_COLORS: Record<string, string> = {
   'В работе': '#facc15',
   'Готово': '#34d399',
   'Готов': '#34d399',
-  'Выдано': '#22c55e',
-  'Отказ сервиса': '#ef4444',
-  'Отказ клиента': '#ef4444',
-  'Закрыт неуспешно': '#ef4444',
-  'Закрыт не успешно': '#ef4444',
-  'Закрыт успешно': '#22c55e',
-  'Закрыт': '#22c55e',
-  'Отказ': '#ef4444',
+  'Выдано': '#94a3b8',
+  'Отказ сервиса': '#94a3b8',
+  'Отказ клиента': '#94a3b8',
+  'Закрыт неуспешно': '#94a3b8',
+  'Закрыт не успешно': '#94a3b8',
+  'Закрыт успешно': '#94a3b8',
+  'Закрыт': '#94a3b8',
+  'Отказ': '#94a3b8',
 }

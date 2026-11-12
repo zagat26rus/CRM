@@ -18,6 +18,7 @@ import {
   ORDER_STATUSES,
   getOrderStatusColor,
   isClosedSuccessStatus,
+  isInactiveOrderStatus,
 } from '../utils/orderStatuses'
 import { notifyBalanceChanged } from '../utils/balanceEvents'
 import { useOrderStatuses } from '../hooks/useCompanySettings'
@@ -120,6 +121,8 @@ export default function Orders(){
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [selectedStatus, setSelectedStatus] = useState<string>('')
+  /** По умолчанию только активные — без выданых/отказов */
+  const [lifecycle, setLifecycle] = useState<'active' | 'closed' | 'all'>('active')
   const [stats, setStats] = useState<any>(null)
   const [closingOrder, setClosingOrder] = useState<Order | null>(null)
   const [showColumns, setShowColumns] = useState(false)
@@ -213,7 +216,11 @@ export default function Orders(){
       const params = new URLSearchParams();
       
       if (search) params.append('client', search);
-      if (selectedStatus) params.append('status', selectedStatus);
+      if (selectedStatus) {
+        params.append('status', selectedStatus);
+      } else if (lifecycle !== 'all') {
+        params.append('lifecycle', lifecycle);
+      }
       
       if (params.toString()) {
         url += `?${params.toString()}`;
@@ -581,9 +588,14 @@ function calculateStatsFromOrders() {
     setSelectedStatus(status === selectedStatus ? '' : status);
   };
 
+  const setLifecycleFilter = (value: 'active' | 'closed' | 'all') => {
+    setLifecycle(value);
+    setSelectedStatus('');
+  };
+
   useEffect(() => {
     loadOrders();
-  }, [selectedStatus]);
+  }, [selectedStatus, lifecycle]);
 
   const formatPhone = (phone: string): string => {
     if (!phone) return '';
@@ -763,12 +775,38 @@ function calculateStatsFromOrders() {
       <div className='card p-3 sm:p-4'>
         <div className='flex flex-col md:flex-row gap-3 sm:gap-4'>
           <div className='flex-1 w-full'>
+            <div className='flex items-center gap-1.5 sm:gap-2 mb-2 overflow-x-auto pb-1 -mx-1 px-1'>
+              {(
+                [
+                  { id: 'active' as const, label: 'Активные' },
+                  { id: 'closed' as const, label: 'Завершённые' },
+                  { id: 'all' as const, label: 'Все заказы' },
+                ]
+              ).map((tab) => (
+                <button
+                  key={tab.id}
+                  className={`tag whitespace-nowrap ${lifecycle === tab.id && !selectedStatus ? 'tag-active' : ''}`}
+                  onClick={() => setLifecycleFilter(tab.id)}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
             <div className='flex items-center gap-1.5 sm:gap-2 mb-2 overflow-x-auto pb-2 -mx-1 px-1'>
               <button className={`tag whitespace-nowrap ${selectedStatus === '' ? 'tag-active' : ''}`} onClick={() => setSelectedStatus('')}>
-                Все
+                {lifecycle === 'active' ? 'Все активные' : lifecycle === 'closed' ? 'Все завершённые' : 'Любой статус'}
               </button>
-              {statuses.map(status => (
-                <button key={status} className={`tag whitespace-nowrap ${selectedStatus === status ? 'tag-active' : ''}`} onClick={() => filterByStatus(status)}>
+              {(lifecycle === 'active'
+                ? statuses.filter((s) => !isInactiveOrderStatus(s))
+                : lifecycle === 'closed'
+                  ? statuses.filter((s) => isInactiveOrderStatus(s))
+                  : statuses
+              ).map((status) => (
+                <button
+                  key={status}
+                  className={`tag whitespace-nowrap ${selectedStatus === status ? 'tag-active' : ''}`}
+                  onClick={() => filterByStatus(status)}
+                >
                   {status}
                 </button>
               ))}
@@ -783,7 +821,16 @@ function calculateStatsFromOrders() {
               />
               <div className='flex gap-2'>
                 <button className='btn secondary text-sm px-3 py-2 flex-1 sm:flex-initial' onClick={handleSearch}>Найти</button>
-                <button className='btn ghost text-sm px-3 py-2' onClick={() => { setSearch(''); setSelectedStatus(''); loadOrders(); }}>Сбросить</button>
+                <button
+                  className='btn ghost text-sm px-3 py-2'
+                  onClick={() => {
+                    setSearch('')
+                    setSelectedStatus('')
+                    setLifecycle('active')
+                  }}
+                >
+                  Сбросить
+                </button>
               </div>
             </div>
           </div>
@@ -805,10 +852,11 @@ function calculateStatsFromOrders() {
           <div className='p-3 space-y-3'>
             {rows.map((order) => {
               const profit = (order.price || 0) - (order.costPrice || 0)
+              const inactive = isInactiveOrderStatus(order.status)
               return (
                 <article
                   key={order.id}
-                  className='list-card active:bg-surface cursor-pointer'
+                  className={`list-card active:bg-surface cursor-pointer ${inactive ? 'opacity-60' : ''}`}
                   onClick={() => setEditingOrder(order)}
                 >
                   <div className='flex items-start justify-between gap-3'>
@@ -933,10 +981,11 @@ function calculateStatsFromOrders() {
                 ) : (
                   rows.map(order => {
                     const profit = (order.price || 0) - (order.costPrice || 0);
+                    const inactive = isInactiveOrderStatus(order.status);
                     return (
                       <tr
                         key={order.id}
-                        className='hover:bg-surface transition-colors cursor-pointer'
+                        className={`hover:bg-surface transition-colors cursor-pointer ${inactive ? 'opacity-55 text-muted' : ''}`}
                         onClick={() => setEditingOrder(order)}
                         title='Открыть заказ'
                       >
