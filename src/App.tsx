@@ -76,7 +76,7 @@ export default function App(){
   }
 
   return (
-    <div className='min-h-[100dvh] flex bg-bg text-text pt-[env(safe-area-inset-top)]'>
+    <div className='min-h-[100dvh] w-full max-w-full overflow-x-clip flex bg-bg text-text pt-[env(safe-area-inset-top)]'>
       {/* Desktop Sidebar */}
       {!isAuthRoute && (
       <aside className={'hidden lg:flex flex-col w-60 border-r border-border bg-bg/70'}>
@@ -107,7 +107,7 @@ export default function App(){
 
       {/* Mobile Sidebar Drawer */}
       {!isAuthRoute && (
-        <aside className={`fixed top-0 left-0 h-full w-64 bg-bg border-r border-border z-50 transform transition-transform duration-300 ease-in-out lg:hidden ${
+        <aside className={`fixed top-0 left-0 h-full w-[min(18rem,88vw)] bg-bg border-r border-border z-50 transform transition-transform duration-300 ease-in-out lg:hidden ${
           mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'
         }`}>
           <div className='h-14 border-b border-border flex items-center justify-between px-4 font-bold'>
@@ -125,7 +125,7 @@ export default function App(){
             {menu.map(m => (
               <NavLink key={m.to} to={m.to} end={m.to==='/'}
                 className={({isActive}) => 
-                  'block px-3 py-3 rounded-xl transition text-base ' + (isActive ? 'bg-primary text-black font-semibold' : 'hover:bg-surface text-text')
+                  'block px-3 py-2.5 rounded-xl transition text-sm ' + (isActive ? 'bg-primary text-black font-semibold' : 'hover:bg-surface text-text')
                 }>
                 {m.label}
               </NavLink>
@@ -136,9 +136,9 @@ export default function App(){
       )}
 
       {/* Main */}
-      <main className='flex-1 min-w-0'>
+      <main className='flex-1 min-w-0 w-full max-w-full overflow-x-clip'>
         {!isAuthRoute && <Topbar refreshKey={loc.pathname} onMenuClick={() => setMobileMenuOpen(true)} />}
-        <div className='container-page pb-[calc(5rem+env(safe-area-inset-bottom))] lg:pb-8'>
+        <div className={`container-page pb-[calc(5rem+env(safe-area-inset-bottom))] lg:pb-8 ${!isAuthRoute ? 'pt-[calc(3.5rem+0.75rem)] lg:pt-8' : ''}`}>
           <Routes>
             <Route path='/login' element={<Login/>} />
             <Route path='/register' element={<Register/>} />
@@ -239,19 +239,19 @@ function Topbar({ refreshKey, onMenuClick }: { refreshKey: string; onMenuClick: 
   }, [refreshKey])
 
   return (
-    <div className='h-14 border-b border-border flex items-center justify-between px-3 md:px-4 sticky top-0 bg-bg/80 backdrop-blur z-40'>
+    <div className='fixed lg:sticky top-[env(safe-area-inset-top)] lg:top-0 left-0 right-0 h-14 border-b border-border flex items-center justify-between gap-2 px-2 md:px-4 bg-bg/95 backdrop-blur z-40'>
       {/* Mobile: Menu button + Logo */}
-      <div className='flex items-center gap-3 lg:hidden'>
+      <div className='flex items-center gap-1.5 lg:hidden shrink-0'>
         <button 
           onClick={onMenuClick}
-          className='p-2 hover:bg-surface rounded-lg transition touch-manipulation'
+          className='w-10 h-10 flex items-center justify-center hover:bg-surface rounded-lg transition touch-manipulation'
           aria-label='Открыть меню'
         >
           <svg className='w-6 h-6' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
             <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M4 6h16M4 12h16M4 18h16' />
           </svg>
         </button>
-        <span className='font-bold text-sm'>
+        <span className='font-bold text-sm whitespace-nowrap'>
           <span className='text-primary'>FixNet</span>&nbsp;CRM
         </span>
       </div>
@@ -263,13 +263,12 @@ function Topbar({ refreshKey, onMenuClick }: { refreshKey: string; onMenuClick: 
       </div>
 
       {/* Mobile: Balance (compact) */}
-      <div className='flex lg:hidden items-center gap-1.5'>
-        <span className='text-xs text-muted'>Баланс:</span>
-        <span className='font-semibold text-sm'>{(balance ?? 0).toLocaleString('ru-RU')} ₽</span>
+      <div className='flex lg:hidden items-center justify-center min-w-0 flex-1'>
+        <span className='font-semibold text-xs sm:text-sm truncate'>{(balance ?? 0).toLocaleString('ru-RU')} ₽</span>
       </div>
 
       {/* Right side actions */}
-      <div className='flex items-center gap-2'>
+      <div className='flex items-center gap-1 shrink-0'>
         <GlobalSearch />
         <button type='button' className='btn secondary hidden md:inline-flex text-sm px-3 py-2' onClick={() => navigate('/help')}>
           Справка
@@ -283,7 +282,7 @@ function Topbar({ refreshKey, onMenuClick }: { refreshKey: string; onMenuClick: 
           </button>
           {/* Mobile: Logout icon */}
           <button 
-            className='sm:hidden p-2 hover:bg-surface rounded-lg transition touch-manipulation'
+            className='sm:hidden w-10 h-10 flex items-center justify-center hover:bg-surface rounded-lg transition touch-manipulation'
             onClick={() => auth.logout()}
             aria-label='Выйти'
           >

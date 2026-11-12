@@ -701,12 +701,12 @@ function StaffModal({ onClose }: { onClose: () => void }) {
                   <option value='30'>30</option>
                 </Select>
               </div>
-              <div className='md:col-span-2 flex gap-2'>
-                <button className='btn' onClick={createInvite} disabled={!canCreateInvites || creatingInvite}>
+              <div className='md:col-span-2 grid grid-cols-1 sm:flex gap-2'>
+                <button className='btn w-full sm:w-auto' onClick={createInvite} disabled={!canCreateInvites || creatingInvite}>
                   {creatingInvite ? 'Создание…' : 'Создать приглашение'}
                 </button>
                 {createdInviteUrl && (
-                  <button className='btn secondary' onClick={() => copy(createdInviteUrl)}>
+                  <button className='btn secondary w-full sm:w-auto' onClick={() => copy(createdInviteUrl)}>
                     Скопировать ссылку
                   </button>
                 )}
@@ -754,7 +754,7 @@ function StaffModal({ onClose }: { onClose: () => void }) {
                           <td className='text-muted'>{i.usedAt ? 'Использовано' : 'Активно'}</td>
                           <td className='text-right'>
                             {!i.usedAt && canCreateInvites ? (
-                              <div className='flex justify-end gap-2'>
+                              <div className='flex justify-end gap-2 flex-wrap'>
                                 <button className='btn secondary' onClick={() => getInviteLink(i.id)}>
                                   Ссылка
                                 </button>

@@ -247,8 +247,8 @@ export default function Clients() {
 
   return (
     <div className='space-y-6'>
-      <div className='flex items-center justify-between'>
-        <div>
+      <div className='flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4'>
+        <div className='min-w-0'>
           <h1 className='text-2xl font-bold'>Клиенты</h1>
           {stats && (
             <div className='flex gap-4 mt-2 text-sm flex-wrap'>
@@ -260,21 +260,21 @@ export default function Clients() {
             </div>
           )}
         </div>
-        <div className='flex gap-2'>
-          <button className='btn secondary' onClick={() => {}}>
+        <div className='grid grid-cols-2 sm:flex gap-2 w-full sm:w-auto'>
+          <button className='btn secondary w-full' onClick={() => {}}>
             Экспорт
           </button>
-          <button className='btn' onClick={() => setShowModal(true)}>
+          <button className='btn w-full' onClick={() => setShowModal(true)}>
             Добавить клиента
           </button>
         </div>
       </div>
 
       <div className='card p-4'>
-        <div className='flex items-center gap-2'>
+        <div className='grid grid-cols-2 sm:flex sm:items-center gap-2'>
           <input 
             placeholder='Поиск по имени, телефону или email...' 
-            className='input flex-1' 
+            className='input col-span-2 sm:col-span-1 sm:flex-1' 
             value={search} 
             onChange={(e) => setSearch(e.target.value)}
             onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
@@ -292,7 +292,7 @@ export default function Clients() {
           </div>
         ) : (
           <div className='overflow-auto'>
-            <table className='w-full table-fixed text-sm'>
+            <table className='w-full min-w-[980px] table-auto text-sm'>
               <thead>
                 <tr>
                   <th className='text-left font-semibold text-muted py-3 px-3 w-[4%]'>ID</th>
@@ -559,8 +559,8 @@ function ClientModal({
     <div className='modal-overlay'>
       <div className='card w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col'>
         <div className='card-inner overflow-y-auto flex-1'>
-          <div className='flex justify-between items-center mb-6'>
-            <h2 className='modal-title'>{isEdit ? 'Редактирование клиента' : 'Новый клиент'}</h2>
+          <div className='flex flex-wrap justify-between items-center gap-3 mb-6'>
+            <h2 className='modal-title min-w-0'>{isEdit ? 'Редактирование клиента' : 'Новый клиент'}</h2>
             <button onClick={onClose} className='btn secondary'>Закрыть</button>
           </div>
 
@@ -715,11 +715,11 @@ function ClientModal({
             )}
           </div>
 
-          <div className='flex justify-between items-center gap-3 mt-8 pt-6 border-t border-border'>
+          <div className='flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 mt-8 pt-6 border-t border-border'>
             {isEdit && client && onDelete ? (
               <button
                 type='button'
-                className='btn secondary text-danger border-danger mr-auto'
+                className='btn secondary text-danger border-danger sm:mr-auto w-full sm:w-auto'
                 onClick={() => onDelete(client.id, client.name)}
                 disabled={loading}
               >
@@ -728,8 +728,8 @@ function ClientModal({
             ) : (
               <span />
             )}
-            <div className='flex gap-3'>
-            <button className='btn secondary' onClick={onClose} disabled={loading}>
+            <div className='grid grid-cols-2 gap-3 w-full sm:w-auto'>
+            <button className='btn secondary w-full' onClick={onClose} disabled={loading}>
               Отмена
             </button>
             <button
@@ -772,8 +772,8 @@ function ClientDetailsModal({
     <div className='modal-overlay'>
       <div className='card w-full max-w-3xl max-h-[90vh] overflow-hidden'>
         <div className='card-inner overflow-y-auto'>
-          <div className='flex justify-between items-center mb-6'>
-            <div>
+          <div className='flex flex-wrap justify-between items-start gap-3 mb-6'>
+            <div className='min-w-0'>
               <h2 className='modal-title'>{client.name}</h2>
               <p className='text-sm text-muted mt-1'>Детальная информация о клиенте</p>
             </div>
@@ -919,15 +919,15 @@ function ClientDetailsModal({
                       }}
                       className='w-full text-left p-3 bg-surface rounded-xl hover:bg-bg border border-transparent hover:border-border transition'
                     >
-                      <div className='flex justify-between items-start'>
-                        <div>
+                      <div className='flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3'>
+                        <div className='min-w-0'>
                           <div className='font-medium'>Заказ #{order.id}</div>
                           <div className='text-sm text-muted mt-1'>{order.problem}</div>
                           <div className='text-xs text-muted mt-2'>
                             {order.brand} {order.model}
                           </div>
                         </div>
-                        <div className='text-right'>
+                        <div className='sm:text-right shrink-0'>
                           <div className={`text-xs px-2 py-1 rounded ${getStatusColor(order.status)}`}>
                             {order.status}
                           </div>
@@ -948,11 +948,11 @@ function ClientDetailsModal({
             </div>
           )}
 
-          <div className='flex justify-between items-center gap-3 mt-8 pt-6 border-t border-border'>
+          <div className='flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 mt-8 pt-6 border-t border-border'>
             {onDelete ? (
               <button
                 type='button'
-                className='btn secondary text-danger border-danger'
+                className='btn secondary text-danger border-danger w-full sm:w-auto'
                 onClick={() => onDelete(client.id, client.name)}
               >
                 Удалить клиента
@@ -960,7 +960,7 @@ function ClientDetailsModal({
             ) : (
               <span />
             )}
-            <button className='btn secondary' onClick={onClose}>
+            <button className='btn secondary w-full sm:w-auto' onClick={onClose}>
               Закрыть
             </button>
           </div>

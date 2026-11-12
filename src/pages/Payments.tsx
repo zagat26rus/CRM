@@ -298,14 +298,14 @@ async function addTx(
   return (
     <div className='space-y-6'>
       {/* Заголовок и кнопки */}
-      <div className='flex items-center justify-between'>
+      <div className='flex flex-col sm:flex-row sm:items-center justify-between gap-3'>
         <div>
           <h1 className='text-2xl font-bold'>Платежи</h1>
           <div className='mt-2 text-lg font-semibold'>
             Баланс: <span className='text-primary'>{balance.toLocaleString('ru-RU')} ₽</span>
           </div>
         </div>
-        <div className='flex gap-3'>
+        <div className='grid grid-cols-2 sm:flex gap-2 sm:gap-3 w-full sm:w-auto'>
           {canManageFinance && (
             <>
               <button 
@@ -366,7 +366,7 @@ async function addTx(
           </div>
         ) : (
           <div className='overflow-auto'>
-            <table className='w-full table-fixed text-sm'>
+            <table className='w-full min-w-[780px] table-auto text-sm'>
               <thead>
                 <tr>
                   <th className='w-[10%] text-left py-3 px-3'>Тип</th>

@@ -515,12 +515,12 @@ export default function Inventory() {
   return (
     <div className='space-y-6'>
       {/* Header */}
-      <div className='flex items-center justify-between gap-3'>
-        <div>
+      <div className='flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3'>
+        <div className='min-w-0'>
           <h1 className='text-2xl font-bold'>Склад</h1>
           <div className='text-sm text-muted mt-1'>Номенклатура, остатки и продажи</div>
         </div>
-        <div className='flex gap-2 flex-wrap'>
+        <div className='grid grid-cols-2 sm:flex gap-2 sm:flex-wrap w-full lg:w-auto'>
           <input
             className='input w-64 hidden md:block'
             placeholder='Поиск по названию / артикулу / поставщику'
@@ -528,7 +528,7 @@ export default function Inventory() {
             onChange={(e) => setSearch(e.target.value)}
           />
           <Select
-            className='input'
+            className='input col-span-2 sm:col-span-1 sm:w-auto'
             value={warehouseFilter}
             onChange={(e) => setWarehouseFilter(e.target.value)}
           >
@@ -537,10 +537,10 @@ export default function Inventory() {
               <option key={w.id} value={String(w.id)}>{w.name}</option>
             ))}
           </Select>
-          <button className='btn secondary' onClick={() => setOpenAddWarehouse(true)}>
+          <button className='btn secondary w-full sm:w-auto' onClick={() => setOpenAddWarehouse(true)}>
             + Склад
           </button>
-          <button className='btn' onClick={() => setOpenAdd(true)}>
+          <button className='btn w-full sm:w-auto' onClick={() => setOpenAdd(true)}>
             + Товар
           </button>
         </div>
@@ -671,7 +671,7 @@ export default function Inventory() {
                         </span>
                       </td>
                       <td className='text-right'>
-                      <div className='flex justify-end gap-2'>
+                      <div className='flex justify-end gap-2 flex-wrap'>
                         <button
                           className='btn secondary'
                           onClick={() => {

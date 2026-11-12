@@ -375,8 +375,8 @@ setForm({
   return (
     <div className='space-y-6'>
       {/* Заголовок и статистика */}
-      <div className='flex items-center justify-between'>
-        <div>
+      <div className='flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4'>
+        <div className='min-w-0'>
           <h1 className='text-2xl font-bold'>Задачи и напоминания</h1>
           {stats && (
             <div className='flex gap-4 mt-2 text-sm flex-wrap'>
@@ -389,14 +389,14 @@ setForm({
             </div>
           )}
         </div>
-        <div className='flex gap-2'>
+        <div className='grid grid-cols-2 sm:flex gap-2 w-full sm:w-auto'>
           <button 
-            className='btn secondary'
+            className='btn secondary w-full'
             onClick={() => setQuickActionsOpen(!quickActionsOpen)}
           >
             Быстрые действия
           </button>
-          <button className='btn' onClick={() => {
+          <button className='btn w-full' onClick={() => {
             setEditingTask(null);
             setForm({
               title: '',
@@ -463,7 +463,7 @@ setForm({
       <div className='card p-4'>
         <div className='flex flex-col md:flex-row gap-4'>
           <div className='flex-1'>
-            <div className='flex items-center gap-2 mb-2 overflow-x-auto pb-2'>
+            <div className='flex flex-wrap items-center gap-2 mb-2'>
               {filterOptions.map(filter => (
                 <button
                   key={filter.id}
@@ -477,10 +477,10 @@ setForm({
                 </button>
               ))}
             </div>
-            <div className='flex items-center gap-2'>
+            <div className='grid grid-cols-2 sm:flex sm:items-center gap-2'>
               <input 
                 placeholder='Поиск по названию задачи...'
-                className='input flex-1'
+                className='input col-span-2 sm:col-span-1 sm:flex-1'
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 onKeyPress={(e) => e.key === 'Enter' && loadTasks()}
@@ -526,9 +526,9 @@ setForm({
                     
                     return (
                     <div key={task.id} className='p-4 hover:bg-surface transition-colors'>
-                      <div className='flex items-start justify-between'>
-                        <div className='flex-1'>
-                          <div className='flex items-center gap-2 mb-2'>
+                      <div className='flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3'>
+                        <div className='flex-1 min-w-0'>
+                          <div className='flex flex-wrap items-center gap-2 mb-2'>
                             <span className='text-xs px-2 py-1 rounded border border-border bg-bg text-muted'>
                               {priorities.find(p => p.id === task.priority)?.label}
                             </span>
@@ -612,7 +612,7 @@ setForm({
                           </div>
                         </div>
                         
-                        <div className='flex gap-2 ml-4'>
+                        <div className='flex gap-2 sm:ml-4'>
                           <button
                             className='text-xs px-2 py-1 rounded bg-bg border border-border hover:bg-surface transition'
                             onClick={() => handleEditTask(task)}

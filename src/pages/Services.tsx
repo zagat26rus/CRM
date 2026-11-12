@@ -420,16 +420,16 @@ export default function Services() {
 
   return (
     <div className='space-y-4'>
-      <div className='flex items-center justify-between'>
+      <div className='flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3'>
         <h1 className='text-2xl font-bold'>Услуги</h1>
-        <div className='flex gap-2'>
+        <div className='flex gap-2 w-full sm:w-auto'>
           {activeTab === 'services' && (
-            <button onClick={() => { setOpenAddService(true); resetServiceForm(); setEditService(null) }} className='btn'>
+            <button onClick={() => { setOpenAddService(true); resetServiceForm(); setEditService(null) }} className='btn w-full sm:w-auto'>
               + Добавить услугу
             </button>
           )}
           {activeTab === 'categories' && (
-            <button onClick={() => { setOpenAddCategory(true); resetCategoryForm(); setEditCategory(null) }} className='btn'>
+            <button onClick={() => { setOpenAddCategory(true); resetCategoryForm(); setEditCategory(null) }} className='btn w-full sm:w-auto'>
               + Добавить категорию
             </button>
           )}
@@ -437,10 +437,10 @@ export default function Services() {
       </div>
 
       {/* Tabs */}
-      <div className='flex gap-2 border-b border-border flex-wrap'>
+      <div className='grid grid-cols-3 sm:flex gap-1 sm:gap-2 border-b border-border'>
         <button
           onClick={() => setActiveTab('catalog')}
-          className={`px-4 py-2 font-medium transition ${
+          className={`px-2 sm:px-4 py-2 text-sm sm:text-base font-medium transition ${
             activeTab === 'catalog' ? 'border-b-2 border-primary text-primary' : 'text-muted hover:text-text'
           }`}
         >
@@ -448,7 +448,7 @@ export default function Services() {
         </button>
         <button
           onClick={() => setActiveTab('services')}
-          className={`px-4 py-2 font-medium transition ${
+          className={`px-2 sm:px-4 py-2 text-sm sm:text-base font-medium transition ${
             activeTab === 'services' ? 'border-b-2 border-primary text-primary' : 'text-muted hover:text-text'
           }`}
         >
@@ -456,7 +456,7 @@ export default function Services() {
         </button>
         <button
           onClick={() => setActiveTab('categories')}
-          className={`px-4 py-2 font-medium transition ${
+          className={`px-2 sm:px-4 py-2 text-sm sm:text-base font-medium transition ${
             activeTab === 'categories' ? 'border-b-2 border-primary text-primary' : 'text-muted hover:text-text'
           }`}
         >
@@ -520,14 +520,14 @@ export default function Services() {
             <span>Обновлено: {formatCatalogSyncedAt(catalogSyncedAt)}</span>
           </div>
 
-          <div className='flex gap-2 flex-wrap'>
+          <div className='grid grid-cols-1 sm:flex gap-2 sm:flex-wrap'>
             <Select
               value={catalogDeviceType}
               onChange={(e) => {
                 setCatalogDeviceType(e.target.value)
                 resetCatalogCascade('device')
               }}
-              className='select min-w-[160px]'
+              className='select w-full sm:w-auto sm:min-w-[160px]'
             >
               <option value=''>Все типы устройств</option>
               {catalogDeviceTypes.map((t) => (
@@ -540,7 +540,7 @@ export default function Services() {
                 setCatalogBrandId(e.target.value)
                 resetCatalogCascade('brand')
               }}
-              className='select min-w-[140px]'
+              className='select w-full sm:w-auto sm:min-w-[140px]'
               disabled={!catalogDeviceType}
               title={!catalogDeviceType ? 'Сначала выберите тип устройства' : ''}
             >
@@ -555,7 +555,7 @@ export default function Services() {
                 setCatalogModelId(e.target.value)
                 resetCatalogCascade('model')
               }}
-              className='select min-w-[160px]'
+              className='select w-full sm:w-auto sm:min-w-[160px]'
               disabled={!catalogBrandId}
               title={!catalogBrandId ? 'Сначала выберите бренд' : ''}
             >
@@ -567,7 +567,7 @@ export default function Services() {
             <Select
               value={catalogIssueCode}
               onChange={(e) => { setCatalogIssueCode(e.target.value); setCatalogPage(1) }}
-              className='select min-w-[160px]'
+              className='select w-full sm:w-auto sm:min-w-[160px]'
               disabled={!catalogDeviceType}
               title={!catalogDeviceType ? 'Сначала выберите тип устройства' : ''}
             >
@@ -579,7 +579,7 @@ export default function Services() {
             <Select
               value={catalogCityCode}
               onChange={(e) => { setCatalogCityCode(e.target.value); setCatalogPage(1) }}
-              className='select min-w-[150px]'
+              className='select w-full sm:w-auto sm:min-w-[150px]'
             >
               <option value=''>Выберите город</option>
               {catalogCities.map((c) => (
@@ -591,12 +591,12 @@ export default function Services() {
               placeholder='Поиск...'
               value={catalogSearch}
               onChange={(e) => setCatalogSearch(e.target.value)}
-              className='input flex-1 min-w-[140px]'
+              className='input w-full sm:flex-1 sm:min-w-[140px]'
             />
             <Select
               value={catalogPartType}
               onChange={(e) => { setCatalogPartType(e.target.value); setCatalogPage(1) }}
-              className='select'
+              className='select w-full sm:w-auto'
             >
               <option value='original'>Оригинал</option>
               <option value='copy'>Копия</option>
@@ -624,7 +624,7 @@ export default function Services() {
               </div>
             ) : (
               <div className='overflow-auto'>
-                <table className='w-full table-fixed text-sm'>
+                <table className='w-full min-w-[980px] table-auto text-sm'>
                   <thead>
                     <tr>
                       <th className='w-[9%] text-left py-3 px-3'>Тип</th>
@@ -680,7 +680,7 @@ export default function Services() {
           </div>
 
           {catalogPages > 1 && (
-            <div className='flex items-center justify-between gap-2'>
+            <div className='flex flex-wrap items-center justify-between gap-2'>
               <span className='text-sm text-muted'>
                 Страница {catalogPage} из {catalogPages}
               </span>
