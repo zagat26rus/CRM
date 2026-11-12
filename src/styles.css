@@ -278,9 +278,21 @@ hr.divider { @apply border-border; }
   p,
   td,
   th,
-  button,
-  a,
-  span {
+  a {
+    overflow-wrap: break-word;
+    word-break: normal;
+  }
+
+  .shop-page,
+  .shop-page button,
+  .shop-page span,
+  .shop-page td,
+  .shop-page th {
+    overflow-wrap: break-word;
+    word-break: normal;
+  }
+
+  .shop-card-title {
     overflow-wrap: anywhere;
   }
 }

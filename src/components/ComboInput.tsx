@@ -11,6 +11,23 @@ type Props = {
   disabled?: boolean
 }
 
+function Chevron({ open }: { open: boolean }) {
+  return (
+    <svg
+      className={clsx('w-4 h-4 shrink-0 text-muted transition-transform', open && 'rotate-180')}
+      viewBox='0 0 20 20'
+      fill='currentColor'
+      aria-hidden
+    >
+      <path
+        fillRule='evenodd'
+        d='M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 111.06 1.06l-4.24 4.25a.75.75 0 01-1.06 0L5.21 8.29a.75.75 0 01.02-1.08z'
+        clipRule='evenodd'
+      />
+    </svg>
+  )
+}
+
 /**
  * Поисковый выпадающий список в стиле Select CRM (не нативный datalist —
  * на мобильных и в Chromium он почти не виден).
@@ -36,7 +53,7 @@ export default function ComboInput({ value, onChange, options, className, placeh
   }, [options, query])
 
   const updatePos = useCallback(() => {
-    const el = inputRef.current
+    const el = wrapRef.current
     if (!el) return
     const rect = el.getBoundingClientRect()
     const gap = 4
@@ -45,7 +62,7 @@ export default function ComboInput({ value, onChange, options, className, placeh
     const spaceAbove = rect.top - gap
     const openUp = spaceBelow < 180 && spaceAbove > spaceBelow
     setMenuPos({
-      left: rect.left,
+      left: Math.max(8, Math.min(rect.left, window.innerWidth - Math.min(rect.width, 360) - 8)),
       top: openUp ? undefined : rect.bottom + gap,
       bottom: openUp ? window.innerHeight - rect.top + gap : undefined,
       width: rect.width,
@@ -93,6 +110,13 @@ export default function ComboInput({ value, onChange, options, className, placeh
     setOpen(false)
   }
 
+  const openMenu = () => {
+    if (disabled) return
+    setQuery(value)
+    setOpen(true)
+    updatePos()
+  }
+
   const menu =
     open && !disabled && menuPos
       ? createPortal(
@@ -105,10 +129,14 @@ export default function ComboInput({ value, onChange, options, className, placeh
               top: menuPos.top,
               bottom: menuPos.bottom,
               width: menuPos.width,
-              maxWidth: 'min(calc(100vw - 2rem), 28rem)',
+              maxWidth: 'min(calc(100vw - 1rem), 28rem)',
             }}
             role='listbox'
           >
+            <div className='px-3 py-2 text-[11px] uppercase tracking-wide text-muted border-b border-border/70 bg-bg/40 flex items-center justify-between gap-2'>
+              <span>Выберите или введите</span>
+              <span className='normal-case tracking-normal'>{filtered.length} из {options.length || 0}</span>
+            </div>
             <ul className='overflow-auto py-1' style={{ maxHeight: menuPos.maxHeight }}>
               {filtered.map((opt) => {
                 const active = opt === value
@@ -143,37 +171,50 @@ export default function ComboInput({ value, onChange, options, className, placeh
 
   return (
     <div ref={wrapRef} className='relative'>
-      <input
-        ref={inputRef}
-        className={clsx('input', className)}
-        value={open ? query : value}
-        placeholder={placeholder}
-        disabled={disabled}
-        autoComplete='off'
-        role='combobox'
-        aria-expanded={open}
-        aria-controls={listId}
-        onFocus={() => {
-          if (disabled) return
-          setQuery(value)
-          setOpen(true)
-          updatePos()
-        }}
-        onClick={() => {
-          if (disabled) return
-          setOpen(true)
-          updatePos()
-        }}
-        onChange={(e) => {
-          const v = e.target.value
-          setQuery(v)
-          onChange(v)
-          if (!open) {
-            setOpen(true)
-            updatePos()
-          }
-        }}
-      />
+      <div className='relative'>
+        <input
+          ref={inputRef}
+          className={clsx('input pr-10', open && !disabled && 'border-primary', className)}
+          value={open ? query : value}
+          placeholder={placeholder}
+          disabled={disabled}
+          autoComplete='off'
+          role='combobox'
+          aria-expanded={open}
+          aria-controls={listId}
+          onFocus={openMenu}
+          onClick={openMenu}
+          onChange={(e) => {
+            const v = e.target.value
+            setQuery(v)
+            onChange(v)
+            if (!open) {
+              setOpen(true)
+              updatePos()
+            }
+          }}
+        />
+        <button
+          type='button'
+          tabIndex={-1}
+          disabled={disabled}
+          aria-label={open ? 'Скрыть список' : 'Открыть список'}
+          className='absolute right-1.5 top-1/2 -translate-y-1/2 w-8 h-8 flex items-center justify-center rounded-lg text-muted hover:bg-bg/70 hover:text-text transition disabled:opacity-40'
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => {
+            if (disabled) return
+            if (open) {
+              setOpen(false)
+              setQuery(value)
+            } else {
+              openMenu()
+              inputRef.current?.focus()
+            }
+          }}
+        >
+          <Chevron open={open} />
+        </button>
+      </div>
       {menu}
     </div>
   )

@@ -349,28 +349,94 @@ router.get('/stats/summary', (req, res) => {
   }
 });
 
-// Поиск клиента по телефону
+function searchClientsByQuery(companyId, rawQuery, limit = 10) {
+  const q = String(rawQuery || '').trim()
+  if (!q) return []
+
+  const digits = q.replace(/\D/g, '')
+  const like = `%${q}%`
+  const phoneLike = digits.length >= 3 ? `%${digits}%` : null
+
+  // Ищем по имени, телефону и email (для подсказок при создании заявки)
+  if (phoneLike) {
+    return db
+      .prepare(
+        `
+      SELECT * FROM clients
+      WHERE companyId = ?
+        AND (
+          phone LIKE ?
+          OR replace(replace(replace(replace(replace(phone, ' ', ''), '-', ''), '(', ''), ')', ''), '+', '') LIKE ?
+          OR name LIKE ?
+          OR IFNULL(email, '') LIKE ?
+        )
+      ORDER BY
+        CASE
+          WHEN phone = ? OR replace(replace(replace(replace(replace(phone, ' ', ''), '-', ''), '(', ''), ')', ''), '+', '') = ? THEN 0
+          WHEN name LIKE ? THEN 1
+          ELSE 2
+        END,
+        lastOrderDate DESC
+      LIMIT ?
+    `
+      )
+      .all(
+        companyId,
+        like,
+        phoneLike,
+        like,
+        like,
+        q,
+        digits,
+        `${q}%`,
+        limit
+      )
+  }
+
+  return db
+    .prepare(
+      `
+    SELECT * FROM clients
+    WHERE companyId = ?
+      AND (name LIKE ? OR IFNULL(email, '') LIKE ? OR phone LIKE ?)
+    ORDER BY
+      CASE WHEN name LIKE ? THEN 0 ELSE 1 END,
+      lastOrderDate DESC
+    LIMIT ?
+  `
+    )
+    .all(companyId, like, like, like, `${q}%`, limit)
+}
+
+// Универсальный поиск клиентов (имя / телефон / email)
+router.get('/search', (req, res) => {
+  try {
+    const q = String(req.query.q || req.query.query || req.query.phone || '').trim()
+    if (!q || q.length < 2) {
+      return res.json([])
+    }
+    const limit = Math.min(20, Math.max(1, Number(req.query.limit) || 10))
+    res.json(searchClientsByQuery(req.user.companyId, q, limit))
+  } catch (error) {
+    console.error('Ошибка поиска клиентов:', error)
+    res.status(500).json({ error: 'Ошибка поиска клиентов' })
+  }
+})
+
+// Поиск клиента по телефону (и по имени — для совместимости со старым UI)
 router.get('/search/by-phone', (req, res) => {
   try {
-    const { phone } = req.query;
-    
-    if (!phone) {
-      return res.status(400).json({ error: 'Укажите телефон для поиска' });
+    const { phone, q } = req.query
+    const query = String(phone || q || '').trim()
+
+    if (!query) {
+      return res.status(400).json({ error: 'Укажите телефон или имя для поиска' })
     }
-    
-    const clients = db.prepare(`
-      SELECT * FROM clients 
-      WHERE companyId = ? AND phone LIKE ?
-      ORDER BY 
-        CASE WHEN phone = ? THEN 0 ELSE 1 END,
-        lastOrderDate DESC
-      LIMIT 10
-    `).all(req.user.companyId, `%${phone}%`, phone);
-    
-    res.json(clients);
+
+    res.json(searchClientsByQuery(req.user.companyId, query, 10))
   } catch (error) {
-    console.error('Ошибка поиска клиента:', error);
-    res.status(500).json({ error: 'Ошибка поиска клиента' });
+    console.error('Ошибка поиска клиента:', error)
+    res.status(500).json({ error: 'Ошибка поиска клиента' })
   }
 });
 

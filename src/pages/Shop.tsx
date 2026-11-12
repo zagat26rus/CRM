@@ -509,13 +509,13 @@ export default function Shop() {
   }
 
   return (
-    <div className='space-y-4 pb-24'>
-      <div className='flex items-center justify-between gap-3 flex-wrap'>
-        <div>
-          <h1 className='text-2xl font-bold'>Магазин</h1>
-          <p className='text-sm text-muted mt-1'>Корзина · продажа со склада · списание · платежи · накладная</p>
+    <div className='shop-page space-y-4 pb-24'>
+      <div className='flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between'>
+        <div className='min-w-0'>
+          <h1 className='text-xl sm:text-2xl font-bold'>Магазин</h1>
+          <p className='text-sm text-muted mt-1'>Продажа со склада · корзина · накладная</p>
         </div>
-        <div className='flex gap-2'>
+        <div className='grid grid-cols-2 gap-2 w-full sm:w-auto sm:flex'>
           <button className='btn secondary' onClick={() => setActiveTab('cart')}>
             Корзина{cartCount > 0 ? ` (${cartCount})` : ''}
           </button>
@@ -525,10 +525,10 @@ export default function Shop() {
         </div>
       </div>
 
-      <div className='flex gap-2 border-b border-border overflow-x-auto'>
+      <div className='flex gap-1 sm:gap-2 border-b border-border overflow-x-auto -mx-1 px-1'>
         {(
           [
-            ['catalog', 'Каталог склада'],
+            ['catalog', 'Каталог'],
             ['cart', `Корзина${cartCount ? ` · ${cartCount}` : ''}`],
             ['sales', 'Продажи'],
             ['stats', 'Статистика'],
@@ -537,7 +537,7 @@ export default function Shop() {
           <button
             key={id}
             onClick={() => setActiveTab(id)}
-            className={`px-4 py-2 font-medium transition whitespace-nowrap ${
+            className={`px-3 sm:px-4 py-2 text-sm font-medium transition whitespace-nowrap shrink-0 ${
               activeTab === id ? 'border-b-2 border-primary text-primary' : 'text-muted hover:text-text'
             }`}
           >
@@ -548,25 +548,27 @@ export default function Shop() {
 
       {activeTab === 'catalog' && (
         <div className='space-y-4'>
-          <div className='flex flex-col sm:flex-row gap-2'>
+          <div className='flex flex-col gap-2'>
             <input
-              className='input flex-1'
+              className='input w-full'
               placeholder='Поиск по складу...'
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
-            <Select className='input' value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)}>
-              <option value=''>Все категории склада</option>
-              {categories.map((c) => (
-                <option key={c.id} value={String(c.id)}>
-                  {c.name}
-                </option>
-              ))}
-            </Select>
-            <label className='flex items-center gap-2 text-sm px-2 whitespace-nowrap'>
-              <input type='checkbox' checked={showZero} onChange={(e) => setShowZero(e.target.checked)} />
-              Показывать нулевые
-            </label>
+            <div className='flex flex-col sm:flex-row gap-2 sm:items-center'>
+              <Select className='input w-full sm:min-w-[12rem]' value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)}>
+                <option value=''>Все категории</option>
+                {categories.map((c) => (
+                  <option key={c.id} value={String(c.id)}>
+                    {c.name}
+                  </option>
+                ))}
+              </Select>
+              <label className='flex items-center gap-2 text-sm px-1 shrink-0'>
+                <input type='checkbox' checked={showZero} onChange={(e) => setShowZero(e.target.checked)} />
+                Показывать нулевые
+              </label>
+            </div>
           </div>
 
           {loading ? (
@@ -576,66 +578,118 @@ export default function Shop() {
               На складе нет позиций{showZero ? '' : ' с остатком'}. Добавьте товар в разделе «Склад».
             </div>
           ) : (
-            <div className='card overflow-x-auto'>
-              <table className='w-full text-sm'>
-                <thead>
-                  <tr className='text-left text-muted border-b border-border'>
-                    <th className='p-3'>Товар</th>
-                    <th className='p-3'>Категория</th>
-                    <th className='p-3'>Остаток</th>
-                    <th className='p-3'>Закуп, ₽</th>
-                    <th className='p-3'>Продажа, ₽</th>
-                    <th className='p-3'>Кол-во</th>
-                    <th className='p-3'></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {items.map((item) => {
-                    const inCart = cartQtyOf(item.id)
-                    const draft = qtyDraft[item.id] ?? '1'
-                    return (
-                      <tr key={item.id} className='border-t border-border hover:bg-surface/50'>
-                        <td className='p-3'>
-                          <div className='font-medium'>{item.name}</div>
-                          {item.sku ? <div className='text-xs text-muted'>{item.sku}</div> : null}
-                          {inCart > 0 ? (
-                            <div className='text-xs text-primary mt-1'>В корзине: {inCart}</div>
-                          ) : null}
-                        </td>
-                        <td className='p-3 text-muted'>{item.categoryName || '—'}</td>
-                        <td className='p-3'>
-                          <span className={item.quantity > 0 ? 'text-green-500' : 'text-red-500'}>
+            <>
+              <div className='space-y-3 md:hidden'>
+                {items.map((item) => {
+                  const inCart = cartQtyOf(item.id)
+                  const draft = qtyDraft[item.id] ?? '1'
+                  return (
+                    <article key={item.id} className='list-card'>
+                      <div className='flex items-start justify-between gap-3'>
+                        <div className='min-w-0 flex-1'>
+                          <div className='font-semibold shop-card-title leading-snug'>{item.name}</div>
+                          <div className='text-xs text-muted mt-1'>
+                            {[item.categoryName, item.sku].filter(Boolean).join(' · ') || 'Без категории'}
+                          </div>
+                          {inCart > 0 ? <div className='text-xs text-primary mt-1'>В корзине: {inCart}</div> : null}
+                        </div>
+                        <div className='text-right shrink-0'>
+                          <div className='font-semibold whitespace-nowrap'>
+                            {Number(item.salePrice || 0).toLocaleString('ru-RU')} ₽
+                          </div>
+                          <div className={`text-xs mt-0.5 ${item.quantity > 0 ? 'text-success' : 'text-danger'}`}>
                             {item.quantity} {item.unit || 'шт'}
-                          </span>
-                        </td>
-                        <td className='p-3 text-muted'>{Number(item.purchasePrice || 0).toLocaleString('ru-RU')}</td>
-                        <td className='p-3 font-medium'>{Number(item.salePrice || 0).toLocaleString('ru-RU')}</td>
-                        <td className='p-3 w-24'>
-                          <input
-                            className='input w-20'
-                            type='number'
-                            min='1'
-                            max={item.quantity}
-                            disabled={item.quantity <= 0}
-                            value={draft}
-                            onChange={(e) => setQtyDraft((d) => ({ ...d, [item.id]: e.target.value }))}
-                          />
-                        </td>
-                        <td className='p-3 text-right whitespace-nowrap'>
-                          <button
-                            className='btn secondary'
-                            disabled={item.quantity <= 0}
-                            onClick={() => addToCart(item, Number(draft || 1))}
-                          >
-                            В корзину
-                          </button>
-                        </td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-            </div>
+                          </div>
+                        </div>
+                      </div>
+                      <div className='text-xs text-muted'>
+                        Закуп: {Number(item.purchasePrice || 0).toLocaleString('ru-RU')} ₽
+                      </div>
+                      <div className='grid grid-cols-[4.25rem_minmax(0,1fr)] gap-2 pt-1 items-center'>
+                        <input
+                          className='input w-full px-2 text-center'
+                          type='number'
+                          min='1'
+                          max={item.quantity}
+                          disabled={item.quantity <= 0}
+                          value={draft}
+                          onChange={(e) => setQtyDraft((d) => ({ ...d, [item.id]: e.target.value }))}
+                          aria-label='Количество'
+                        />
+                        <button
+                          className='btn secondary w-full min-w-0 px-3 text-sm'
+                          disabled={item.quantity <= 0}
+                          onClick={() => addToCart(item, Number(draft || 1))}
+                        >
+                          В корзину
+                        </button>
+                      </div>
+                    </article>
+                  )
+                })}
+              </div>
+
+              <div className='card overflow-x-auto hidden md:block'>
+                <table className='w-full text-sm table'>
+                  <thead>
+                    <tr className='text-left text-muted border-b border-border'>
+                      <th className='p-3'>Товар</th>
+                      <th className='p-3'>Категория</th>
+                      <th className='p-3'>Остаток</th>
+                      <th className='p-3'>Закуп, ₽</th>
+                      <th className='p-3'>Продажа, ₽</th>
+                      <th className='p-3'>Кол-во</th>
+                      <th className='p-3'></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {items.map((item) => {
+                      const inCart = cartQtyOf(item.id)
+                      const draft = qtyDraft[item.id] ?? '1'
+                      return (
+                        <tr key={item.id} className='border-t border-border hover:bg-surface/50'>
+                          <td className='p-3'>
+                            <div className='font-medium'>{item.name}</div>
+                            {item.sku ? <div className='text-xs text-muted'>{item.sku}</div> : null}
+                            {inCart > 0 ? (
+                              <div className='text-xs text-primary mt-1'>В корзине: {inCart}</div>
+                            ) : null}
+                          </td>
+                          <td className='p-3 text-muted'>{item.categoryName || '—'}</td>
+                          <td className='p-3'>
+                            <span className={item.quantity > 0 ? 'text-green-500' : 'text-red-500'}>
+                              {item.quantity} {item.unit || 'шт'}
+                            </span>
+                          </td>
+                          <td className='p-3 text-muted'>{Number(item.purchasePrice || 0).toLocaleString('ru-RU')}</td>
+                          <td className='p-3 font-medium'>{Number(item.salePrice || 0).toLocaleString('ru-RU')}</td>
+                          <td className='p-3 w-24'>
+                            <input
+                              className='input w-20'
+                              type='number'
+                              min='1'
+                              max={item.quantity}
+                              disabled={item.quantity <= 0}
+                              value={draft}
+                              onChange={(e) => setQtyDraft((d) => ({ ...d, [item.id]: e.target.value }))}
+                            />
+                          </td>
+                          <td className='p-3 text-right whitespace-nowrap'>
+                            <button
+                              className='btn secondary'
+                              disabled={item.quantity <= 0}
+                              onClick={() => addToCart(item, Number(draft || 1))}
+                            >
+                              В корзину
+                            </button>
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </>
           )}
         </div>
       )}
@@ -651,8 +705,80 @@ export default function Shop() {
             </div>
           ) : (
             <>
-              <div className='card overflow-x-auto'>
-                <table className='w-full text-sm'>
+              <div className='space-y-3 md:hidden'>
+                {cart.map((line) => (
+                  <article key={line.itemId} className='list-card'>
+                    <div className='flex items-start justify-between gap-3'>
+                      <div className='min-w-0 flex-1'>
+                        <div className='font-semibold shop-card-title leading-snug'>{line.name}</div>
+                        <div className='text-xs text-muted mt-1'>
+                          {line.categoryName || '—'} · макс. {line.maxQty} {line.unit || 'шт'}
+                        </div>
+                      </div>
+                      <button
+                        type='button'
+                        className='btn ghost text-xs shrink-0'
+                        onClick={() => removeFromCart(line.itemId)}
+                      >
+                        Удалить
+                      </button>
+                    </div>
+                    <div className='grid grid-cols-2 gap-2'>
+                      <div>
+                        <div className='text-[11px] text-muted mb-1'>Кол-во</div>
+                        <div className='flex items-center gap-1'>
+                          <button
+                            type='button'
+                            className='btn ghost px-2 min-w-[2.5rem]'
+                            onClick={() => setCartLineQty(line.itemId, line.quantity - 1)}
+                          >
+                            −
+                          </button>
+                          <input
+                            className='input w-14 text-center px-1'
+                            type='number'
+                            min='1'
+                            max={line.maxQty}
+                            value={line.quantity}
+                            onChange={(e) => setCartLineQty(line.itemId, e.target.value)}
+                          />
+                          <button
+                            type='button'
+                            className='btn ghost px-2 min-w-[2.5rem]'
+                            disabled={line.quantity >= line.maxQty}
+                            onClick={() => setCartLineQty(line.itemId, line.quantity + 1)}
+                          >
+                            +
+                          </button>
+                        </div>
+                      </div>
+                      <div>
+                        <div className='text-[11px] text-muted mb-1'>Цена, ₽</div>
+                        <input
+                          className='input w-full'
+                          type='number'
+                          min='0'
+                          step='0.01'
+                          value={line.price}
+                          onChange={(e) => setCartLinePrice(line.itemId, e.target.value)}
+                        />
+                      </div>
+                    </div>
+                    <div className='flex justify-between text-sm pt-1'>
+                      <span className='text-muted'>Сумма / закуп</span>
+                      <span className='text-right'>
+                        <span className='font-semibold'>{(line.price * line.quantity).toLocaleString('ru-RU')} ₽</span>
+                        <span className='text-xs text-muted block'>
+                          {(line.purchasePrice * line.quantity).toLocaleString('ru-RU')} ₽
+                        </span>
+                      </span>
+                    </div>
+                  </article>
+                ))}
+              </div>
+
+              <div className='card overflow-x-auto hidden md:block'>
+                <table className='w-full text-sm table'>
                   <thead>
                     <tr className='text-left text-muted border-b border-border'>
                       <th className='p-3'>Товар</th>
@@ -727,27 +853,27 @@ export default function Shop() {
               </div>
 
               <div className='card p-4 space-y-3'>
-                <div className='flex justify-between text-sm'>
-                  <span className='text-muted'>Позиций / штук</span>
-                  <span>
+                <div className='flex justify-between text-sm gap-3'>
+                  <span className='text-muted shrink-0'>Позиций / штук</span>
+                  <span className='text-right'>
                     {cart.length} / {cartCount}
                   </span>
                 </div>
-                <div className='flex justify-between text-sm'>
-                  <span className='text-muted'>Сумма продажи</span>
-                  <span className='font-semibold'>{cartSubtotal.toLocaleString('ru-RU')} ₽</span>
+                <div className='flex justify-between text-sm gap-3'>
+                  <span className='text-muted shrink-0'>Сумма продажи</span>
+                  <span className='font-semibold text-right whitespace-nowrap'>{cartSubtotal.toLocaleString('ru-RU')} ₽</span>
                 </div>
-                <div className='flex justify-between text-sm'>
-                  <span className='text-muted'>Себестоимость</span>
-                  <span>{cartCost.toLocaleString('ru-RU')} ₽</span>
+                <div className='flex justify-between text-sm gap-3'>
+                  <span className='text-muted shrink-0'>Себестоимость</span>
+                  <span className='text-right whitespace-nowrap'>{cartCost.toLocaleString('ru-RU')} ₽</span>
                 </div>
-                <div className='flex justify-between pt-2 border-t border-border'>
-                  <span className='font-medium'>Прибыль</span>
-                  <span className={`font-bold ${cartProfit >= 0 ? 'text-success' : 'text-danger'}`}>
+                <div className='flex justify-between pt-2 border-t border-border gap-3'>
+                  <span className='font-medium shrink-0'>Прибыль</span>
+                  <span className={`font-bold text-right whitespace-nowrap ${cartProfit >= 0 ? 'text-success' : 'text-danger'}`}>
                     {cartProfit.toLocaleString('ru-RU')} ₽
                   </span>
                 </div>
-                <div className='flex flex-wrap gap-2 justify-end pt-2'>
+                <div className='grid grid-cols-1 sm:flex sm:flex-wrap gap-2 sm:justify-end pt-2'>
                   <button className='btn secondary' onClick={() => setActiveTab('catalog')}>
                     + Ещё товары
                   </button>
@@ -780,57 +906,106 @@ export default function Shop() {
           ) : sales.length === 0 ? (
             <div className='card p-8 text-center text-muted'>Продаж пока нет</div>
           ) : (
-            <div className='card overflow-x-auto'>
-              <table className='w-full text-sm'>
-                <thead>
-                  <tr className='text-left text-muted border-b border-border'>
-                    <th className='p-3'>№</th>
-                    <th className='p-3'>Дата</th>
-                    <th className='p-3'>Клиент</th>
-                    <th className='p-3'>Товары</th>
-                    <th className='p-3'>Сумма</th>
-                    <th className='p-3'>Себест.</th>
-                    <th className='p-3'></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {sales.map((sale) => {
-                    const cost =
-                      sale.estimatedCost ??
-                      sale.items.reduce(
-                        (s, i) => s + Number(i.purchasePrice || 0) * Number(i.quantity || 0),
-                        0
-                      )
-                    return (
-                      <tr key={sale.id} className='border-t border-border hover:bg-surface/50'>
-                        <td className='p-3 font-medium'>{sale.orderNumber}</td>
-                        <td className='p-3 text-muted'>
-                          {sale.createdAt ? new Date(sale.createdAt).toLocaleString('ru-RU') : '—'}
-                        </td>
-                        <td className='p-3'>
-                          <div>{sale.clientName}</div>
-                          {sale.clientPhone ? <div className='text-xs text-muted'>{sale.clientPhone}</div> : null}
-                        </td>
-                        <td className='p-3 text-muted'>
-                          {sale.items?.slice(0, 3).map((i) => `${i.name} × ${i.quantity}`).join(', ')}
-                          {sale.items?.length > 3 ? ` +${sale.items.length - 3}` : ''}
-                        </td>
-                        <td className='p-3 font-medium'>{Number(sale.total || 0).toLocaleString('ru-RU')} ₽</td>
-                        <td className='p-3 text-muted'>{Number(cost || 0).toLocaleString('ru-RU')} ₽</td>
-                        <td className='p-3 text-right space-x-2 whitespace-nowrap'>
-                          <button className='btn secondary' onClick={() => setSelectedSale(sale)}>
-                            Открыть
-                          </button>
-                          <button className='btn secondary' onClick={() => printInvoiceForOrder(sale.id)}>
-                            Накладная
-                          </button>
-                        </td>
-                      </tr>
+            <>
+              <div className='space-y-3 md:hidden'>
+                {sales.map((sale) => {
+                  const cost =
+                    sale.estimatedCost ??
+                    sale.items.reduce(
+                      (s, i) => s + Number(i.purchasePrice || 0) * Number(i.quantity || 0),
+                      0
                     )
-                  })}
-                </tbody>
-              </table>
-            </div>
+                  return (
+                    <article key={sale.id} className='list-card'>
+                      <div className='flex items-start justify-between gap-3'>
+                        <div className='min-w-0'>
+                          <div className='font-semibold'>{sale.orderNumber}</div>
+                          <div className='text-sm truncate'>{sale.clientName || 'Без клиента'}</div>
+                          {sale.clientPhone ? (
+                            <div className='text-xs text-muted'>{sale.clientPhone}</div>
+                          ) : null}
+                        </div>
+                        <div className='text-right shrink-0'>
+                          <div className='font-semibold whitespace-nowrap'>
+                            {Number(sale.total || 0).toLocaleString('ru-RU')} ₽
+                          </div>
+                          <div className='text-[11px] text-muted mt-1'>
+                            {sale.createdAt ? new Date(sale.createdAt).toLocaleDateString('ru-RU') : '—'}
+                          </div>
+                        </div>
+                      </div>
+                      <div className='text-sm text-muted line-clamp-2'>
+                        {sale.items?.slice(0, 3).map((i) => `${i.name} × ${i.quantity}`).join(', ')}
+                        {sale.items?.length > 3 ? ` +${sale.items.length - 3}` : ''}
+                      </div>
+                      <div className='text-xs text-muted'>
+                        Себест.: {Number(cost || 0).toLocaleString('ru-RU')} ₽
+                      </div>
+                      <div className='grid grid-cols-2 gap-2 pt-1'>
+                        <button className='btn secondary' onClick={() => setSelectedSale(sale)}>
+                          Открыть
+                        </button>
+                        <button className='btn secondary' onClick={() => printInvoiceForOrder(sale.id)}>
+                          Накладная
+                        </button>
+                      </div>
+                    </article>
+                  )
+                })}
+              </div>
+
+              <div className='card overflow-x-auto hidden md:block'>
+                <table className='w-full text-sm table'>
+                  <thead>
+                    <tr className='text-left text-muted border-b border-border'>
+                      <th className='p-3'>№</th>
+                      <th className='p-3'>Дата</th>
+                      <th className='p-3'>Клиент</th>
+                      <th className='p-3'>Товары</th>
+                      <th className='p-3'>Сумма</th>
+                      <th className='p-3'>Себест.</th>
+                      <th className='p-3'></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {sales.map((sale) => {
+                      const cost =
+                        sale.estimatedCost ??
+                        sale.items.reduce(
+                          (s, i) => s + Number(i.purchasePrice || 0) * Number(i.quantity || 0),
+                          0
+                        )
+                      return (
+                        <tr key={sale.id} className='border-t border-border hover:bg-surface/50'>
+                          <td className='p-3 font-medium'>{sale.orderNumber}</td>
+                          <td className='p-3 text-muted'>
+                            {sale.createdAt ? new Date(sale.createdAt).toLocaleString('ru-RU') : '—'}
+                          </td>
+                          <td className='p-3'>
+                            <div>{sale.clientName}</div>
+                            {sale.clientPhone ? <div className='text-xs text-muted'>{sale.clientPhone}</div> : null}
+                          </td>
+                          <td className='p-3 text-muted'>
+                            {sale.items?.slice(0, 3).map((i) => `${i.name} × ${i.quantity}`).join(', ')}
+                            {sale.items?.length > 3 ? ` +${sale.items.length - 3}` : ''}
+                          </td>
+                          <td className='p-3 font-medium'>{Number(sale.total || 0).toLocaleString('ru-RU')} ₽</td>
+                          <td className='p-3 text-muted'>{Number(cost || 0).toLocaleString('ru-RU')} ₽</td>
+                          <td className='p-3 text-right space-x-2 whitespace-nowrap'>
+                            <button className='btn secondary' onClick={() => setSelectedSale(sale)}>
+                              Открыть
+                            </button>
+                            <button className='btn secondary' onClick={() => printInvoiceForOrder(sale.id)}>
+                              Накладная
+                            </button>
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </>
           )}
         </div>
       )}
@@ -842,21 +1017,23 @@ export default function Shop() {
           ) : (
             <>
               <div className='grid grid-cols-2 md:grid-cols-4 gap-3'>
-                <div className='card p-4'>
-                  <div className='text-sm text-muted mb-1'>Продаж</div>
-                  <div className='text-2xl font-bold'>{stats.totalOrders}</div>
+                <div className='card p-3 sm:p-4 min-w-0'>
+                  <div className='text-xs sm:text-sm text-muted mb-1'>Продаж</div>
+                  <div className='text-xl sm:text-2xl font-bold tabular-nums'>{stats.totalOrders}</div>
                 </div>
-                <div className='card p-4'>
-                  <div className='text-sm text-muted mb-1'>Выручка</div>
-                  <div className='text-2xl font-bold'>{Number(stats.totalRevenue || 0).toLocaleString('ru-RU')} ₽</div>
+                <div className='card p-3 sm:p-4 min-w-0'>
+                  <div className='text-xs sm:text-sm text-muted mb-1'>Выручка</div>
+                  <div className='text-lg sm:text-2xl font-bold tabular-nums leading-tight'>
+                    {Number(stats.totalRevenue || 0).toLocaleString('ru-RU')} ₽
+                  </div>
                 </div>
-                <div className='card p-4'>
-                  <div className='text-sm text-muted mb-1'>Позиций на складе</div>
-                  <div className='text-2xl font-bold'>{stats.totalProducts}</div>
+                <div className='card p-3 sm:p-4 min-w-0'>
+                  <div className='text-xs sm:text-sm text-muted mb-1'>На складе</div>
+                  <div className='text-xl sm:text-2xl font-bold tabular-nums'>{stats.totalProducts}</div>
                 </div>
-                <div className='card p-4'>
-                  <div className='text-sm text-muted mb-1'>В наличии</div>
-                  <div className='text-2xl font-bold'>{stats.activeProducts}</div>
+                <div className='card p-3 sm:p-4 min-w-0'>
+                  <div className='text-xs sm:text-sm text-muted mb-1'>В наличии</div>
+                  <div className='text-xl sm:text-2xl font-bold tabular-nums'>{stats.activeProducts}</div>
                 </div>
               </div>
             </>
@@ -867,18 +1044,18 @@ export default function Shop() {
       {/* Sticky cart bar */}
       {cartCount > 0 && activeTab !== 'cart' && (
         <div className='fixed bottom-[calc(3.5rem+env(safe-area-inset-bottom))] lg:bottom-4 left-0 right-0 z-30 px-3 pointer-events-none'>
-          <div className='max-w-3xl mx-auto pointer-events-auto card p-3 flex items-center justify-between gap-3 shadow-lg border border-primary/30'>
-            <div className='min-w-0'>
-              <div className='font-medium truncate'>
+          <div className='max-w-3xl mx-auto pointer-events-auto card p-3 flex items-center justify-between gap-2 shadow-lg border border-primary/30'>
+            <div className='min-w-0 flex-1'>
+              <div className='font-medium truncate text-sm sm:text-base'>
                 Корзина: {cart.length} поз. · {cartCount} шт
               </div>
-              <div className='text-sm text-muted'>{cartSubtotal.toLocaleString('ru-RU')} ₽</div>
+              <div className='text-sm text-muted whitespace-nowrap'>{cartSubtotal.toLocaleString('ru-RU')} ₽</div>
             </div>
             <div className='flex gap-2 shrink-0'>
-              <button className='btn secondary' onClick={() => setActiveTab('cart')}>
+              <button className='btn secondary px-3' onClick={() => setActiveTab('cart')}>
                 Открыть
               </button>
-              <button className='btn' onClick={openCheckoutModal}>
+              <button className='btn px-3' onClick={openCheckoutModal}>
                 Оформить
               </button>
             </div>

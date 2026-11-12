@@ -1,5 +1,6 @@
 import { useMemo, useState, useEffect } from 'react'
 import { useLockBodyScroll } from '../hooks/useLockBodyScroll'
+import ClientSuggestInput from '../components/ClientSuggestInput'
 import { useSearchParams } from 'react-router-dom'
 import { apiFetch, isImageAttachment, staticUrl } from '../api'
 import { printRepairReceipt, renderRepairReceiptHtml } from '../repairReceiptTemplate'
@@ -310,7 +311,7 @@ function calculateStatsFromOrders() {
   async function searchClients(query: string) {
     try {
       setClientLoading(true);
-      const response = await apiFetch(`/clients/search/by-phone?phone=${encodeURIComponent(query)}`);
+      const response = await apiFetch(`/clients/search?q=${encodeURIComponent(query)}&limit=12`);
       
       if (response.ok) {
         const data = await response.json();
@@ -1863,7 +1864,7 @@ function OrderModal({
     inspection: {} as Record<string, any>,
     wishes: {} as Record<string, any>,
     status: 'Создана',
-    price: '', costPrice: '', description: '', warranty: false, onSite: false, paymentMethod: 'cash'
+    price: '', costPrice: '', description: '', issueSubtype: '', warranty: false, onSite: false, paymentMethod: 'cash'
   });
   const [printAfterSave, setPrintAfterSave] = useState(true)
   const catalog = useDeviceCatalog()
@@ -1912,7 +1913,7 @@ function OrderModal({
   }
 
   const handleIssueSubtypeChange = (value: string) => {
-    setForm((prev) => ({ ...prev, description: value }))
+    setForm((prev) => ({ ...prev, issueSubtype: value }))
     const inList = catalog.subtypeNames.some((o) => o.toLowerCase() === value.trim().toLowerCase())
     if (inList && value.trim() && form.problem.trim()) void applyCatalogPrice(form.problem, value)
   }
@@ -1924,7 +1925,7 @@ function OrderModal({
       void fetchCatalogPrice({
         brand: form.brand,
         model: form.model,
-        problemName: (form.description || form.problem).trim(),
+        problemName: (form.issueSubtype || form.problem).trim(),
         partType,
       }).then((result) => {
         if (!result) return
@@ -1945,12 +1946,11 @@ function OrderModal({
   const [clientLoading, setClientLoading] = useState(false);
   const [selectedClientId, setSelectedClientId] = useState<number | ''>('');
   const [showClientSearch, setShowClientSearch] = useState(false);
-  const [phoneSuggestOpen, setPhoneSuggestOpen] = useState(false);
 
   const searchClients = async (query: string) => {
     try {
       setClientLoading(true);
-      const response = await apiFetch(`/clients/search/by-phone?phone=${encodeURIComponent(query)}`);
+      const response = await apiFetch(`/clients/search?q=${encodeURIComponent(query)}&limit=12`);
       
       if (response.ok) {
         const data = await response.json();
@@ -1966,6 +1966,16 @@ function OrderModal({
     }
   };
 
+  const applyClient = (c: { id: number; name: string; phone: string; email?: string }) => {
+    setSelectedClientId(c.id)
+    setForm((prev) => ({
+      ...prev,
+      client: c.name || '',
+      phone: formatPhoneProp(c.phone || ''),
+      email: c.email || prev.email || '',
+    }))
+  }
+
   const handleSubmit = async () => {
     try {
       if (!form.problem.trim()) {
@@ -1973,9 +1983,13 @@ function OrderModal({
         return
       }
 
+      const problemDescription = [form.issueSubtype?.trim(), form.description?.trim()]
+        .filter(Boolean)
+        .join(' · ')
+
       const problemsList = [{
         problemName: form.problem.trim(),
-        problemDescription: form.description?.trim() || '',
+        problemDescription,
         price: Number(form.price) || 0,
         costPrice: Number(form.costPrice) || 0,
         problemId: null,
@@ -1996,10 +2010,12 @@ function OrderModal({
           dueAt: form.dueAt ? new Date(form.dueAt).toISOString() : null,
           inspection: (form as any).inspection || {},
           wishes: (form as any).wishes || {},
+          description: problemDescription,
           problem: problemsList[0]?.problemName || form.problem, // для обратной совместимости
           problems: problemsList,
           price: totalPrice,
           costPrice: totalCostPrice,
+          clientId: selectedClientId || undefined,
           createdAt: new Date().toISOString()
         })
       });
@@ -2069,110 +2085,76 @@ function OrderModal({
           <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
             {/* Поля клиента с выбором из существующих */}
             <div className="md:col-span-2">
-              <label className="label">Клиент *</label>
-              <div className="flex gap-2 mb-2">
+              <div className="flex items-center justify-between gap-2 mb-2">
+                <label className="label mb-0">Клиент *</label>
                 <button 
                   type="button"
-                  className="btn secondary text-sm"
+                  className="btn secondary text-xs sm:text-sm"
                   onClick={() => {
                     setShowClientSearch(true);
                     setClientSearch('');
                     setClients([]);
                   }}
                 >
-                  Выбрать из клиентов
+                  Все клиенты
                 </button>
               </div>
               
               {selectedClientId ? (
                 <div className="p-3 bg-surface border border-border rounded-xl mb-3">
-                  <div className="flex justify-between items-center">
-                    <div>
-                      <div className="font-medium">{form.client}</div>
+                  <div className="flex justify-between items-start gap-3">
+                    <div className="min-w-0">
+                      <div className="text-[11px] uppercase tracking-wide text-muted mb-1">Выбран из базы</div>
+                      <div className="font-medium truncate">{form.client}</div>
                       <div className="text-sm text-muted">{formatPhoneLocal(form.phone)}</div>
                     </div>
                     <button 
                       type="button"
-                      className="text-xs text-danger hover:underline"
+                      className="text-xs text-danger hover:underline shrink-0"
                       onClick={() => {
                         setSelectedClientId('');
-                        setForm(prev => ({ ...prev, client: '', phone: '' }));
+                        setForm(prev => ({ ...prev, client: '', phone: '', email: '' }));
                       }}
                     >
                       Сбросить
                     </button>
                   </div>
                 </div>
-              ) : null}
+              ) : (
+                <p className="text-xs text-muted mb-2">
+                  Начните вводить имя или телефон — покажем похожих клиентов из базы
+                </p>
+              )}
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <input 
-                    className="input" 
-                    value={form.client} 
-                    onChange={(e) => setForm({...form, client: e.target.value})} 
+                  <label className="label">ФИО</label>
+                  <ClientSuggestInput
+                    mode="name"
+                    value={form.client}
                     placeholder="ФИО клиента"
+                    formatPhone={formatPhoneLocal}
+                    onChange={(v) => {
+                      setSelectedClientId('')
+                      setForm((prev) => ({ ...prev, client: v }))
+                    }}
+                    onSelect={applyClient}
                   />
                 </div>
                 <div>
-                  <div className="relative">
-                    <input 
-                      className="input" 
-                      value={form.phone} 
-                      onChange={(e) => { 
-                        const raw = e.target.value;
-                        const formatted = formatPhoneProp(raw); 
-                        setForm(prev => ({...prev, phone: formatted})); 
-                        if (raw && raw.replace(/\D/g, '').length >= 5) {
-                          searchClients(raw);
-                          setPhoneSuggestOpen(true);
-                        } else {
-                          setPhoneSuggestOpen(false);
-                        }
-                      }} 
-                      onFocus={() => {
-                        if (clients.length > 0) setPhoneSuggestOpen(true);
-                      }}
-                      onBlur={() => {
-                        // небольшой таймаут, чтобы успеть кликнуть по пункту
-                        setTimeout(() => setPhoneSuggestOpen(false), 150);
-                      }}
-                      placeholder="+7 (___) ___-__-__"
-                    />
-                    {phoneSuggestOpen && (
-                      <div className="absolute z-50 mt-2 w-full rounded-xl border border-border bg-bg shadow-lg overflow-hidden">
-                        {clientLoading ? (
-                          <div className="p-3 text-sm text-muted">Поиск...</div>
-                        ) : clients.length === 0 ? (
-                          <div className="p-3 text-sm text-muted">Клиенты не найдены</div>
-                        ) : (
-                          <div className="max-h-56 overflow-auto">
-                            {clients.map(c => (
-                              <button
-                                key={c.id}
-                                type="button"
-                                className="w-full text-left p-3 hover:bg-surface transition border-b border-border last:border-b-0"
-                                onMouseDown={(evt) => evt.preventDefault()}
-                                onClick={() => {
-                                  setSelectedClientId(c.id);
-                                  setForm(prev => ({
-                                    ...prev,
-                                    client: c.name,
-                                    phone: c.phone,
-                                    email: c.email || ''
-                                  }));
-                                  setPhoneSuggestOpen(false);
-                                }}
-                              >
-                                <div className="font-medium">{c.name}</div>
-                                <div className="text-xs text-muted mt-1">{formatPhoneLocal(c.phone)}{c.email ? ` · ${c.email}` : ''}</div>
-                              </button>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
+                  <label className="label">Телефон</label>
+                  <ClientSuggestInput
+                    mode="phone"
+                    value={form.phone}
+                    placeholder="+7 (___) ___-__-__"
+                    formatPhone={formatPhoneLocal}
+                    minChars={3}
+                    onChange={(v) => {
+                      setSelectedClientId('')
+                      setForm((prev) => ({ ...prev, phone: formatPhoneProp(v) }))
+                    }}
+                    onSelect={applyClient}
+                  />
                 </div>
               </div>
             </div>
@@ -2198,7 +2180,7 @@ function OrderModal({
                 brand={form.brand}
                 model={form.model}
                 issue={form.problem}
-                issueSubtype={form.description || ''}
+                issueSubtype={form.issueSubtype || ''}
                 issueOptions={issueOptions}
                 partType={form.partType}
                 onDeviceTypeChange={(deviceType) => setForm((prev) => ({ ...prev, deviceType }))}
@@ -2322,22 +2304,24 @@ function OrderModal({
       {/* Модальное окно выбора клиента */}
       {showClientSearch && (
         <div className="modal-overlay">
-          <div className="card w-full max-w-md">
+          <div className="modal-panel max-w-md">
             <div className="card-inner">
-              <div className="flex justify-between items-center mb-4">
+              <div className="flex justify-between items-center gap-3 mb-4">
                 <h3 className="modal-title">Выбор клиента</h3>
-                <button onClick={() => setShowClientSearch(false)} className="btn secondary">Закрыть</button>
+                <button onClick={() => setShowClientSearch(false)} className="btn secondary shrink-0">Закрыть</button>
               </div>
               
               <div className="mb-4">
                 <input
                   className="input"
-                  placeholder="Поиск по телефону или имени..."
+                  placeholder="Имя, телефон или email..."
                   value={clientSearch}
                   onChange={(e) => {
                     setClientSearch(e.target.value);
-                    if (e.target.value.length >= 2) {
+                    if (e.target.value.trim().length >= 2) {
                       searchClients(e.target.value);
+                    } else {
+                      setClients([]);
                     }
                   }}
                   autoFocus
@@ -2358,13 +2342,7 @@ function OrderModal({
                       type="button"
                       className="w-full p-3 text-left bg-bg hover:bg-surface rounded-xl border border-border transition"
                       onClick={() => {
-                        setSelectedClientId(client.id);
-                        setForm(prev => ({
-                          ...prev,
-                          client: client.name,
-                          phone: client.phone,
-                          email: client.email || ''
-                        }));
+                        applyClient(client)
                         setShowClientSearch(false);
                         setClientSearch('');
                       }}
@@ -2375,7 +2353,7 @@ function OrderModal({
                         <div className="text-xs text-muted mt-1">{client.email}</div>
                       )}
                       <div className="text-xs text-muted mt-2">
-                        {client.totalOrders} заказов · {client.totalSpent?.toLocaleString('ru-RU')} ₽
+                        {client.totalOrders || 0} заказов · {(client.totalSpent || 0).toLocaleString('ru-RU')} ₽
                       </div>
                     </button>
                   ))
@@ -2383,14 +2361,14 @@ function OrderModal({
                   <div className="text-center py-8 text-muted">
                     <p>Клиенты не найдены</p>
                   </div>
-                ) : clientSearch.length === 0 ? (
+                ) : (
                   <div className="text-center py-8 text-muted">
                     <p>Введите телефон или имя для поиска</p>
                   </div>
-                ) : null}
+                )}
               </div>
               
-              <div className="flex justify-end gap-3 mt-6 pt-6 border-t border-border">
+              <div className="flex flex-col-reverse sm:flex-row justify-end gap-3 mt-6 pt-6 border-t border-border">
                 <button className="btn secondary" onClick={() => setShowClientSearch(false)}>
                   Отмена
                 </button>
