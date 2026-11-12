@@ -110,7 +110,7 @@ export default function App(){
 
       {/* Mobile Sidebar Drawer */}
       {!isAuthRoute && (
-        <aside className={`fixed top-0 left-0 h-full w-[min(18rem,88vw)] bg-bg border-r border-border z-50 transform transition-transform duration-300 ease-in-out lg:hidden ${
+        <aside className={`fixed top-0 left-0 h-full w-[min(18rem,88vw)] bg-bg border-r border-border z-50 flex flex-col transform transition-transform duration-300 ease-in-out lg:hidden ${
           mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'
         }`}>
           <div className='h-14 border-b border-border flex items-center justify-between px-4 font-bold'>
