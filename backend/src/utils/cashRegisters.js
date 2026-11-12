@@ -6,7 +6,14 @@ function ensureDefaultRegister(companyId) {
       'SELECT * FROM cash_registers WHERE companyId = ? AND isActive = 1 ORDER BY isDefault DESC, id ASC LIMIT 1'
     )
     .get(companyId)
-  if (existing) return existing
+  if (existing) {
+    // Старые операции создавались до появления касс. Их баланс принадлежит
+    // основной (или первой активной) кассе, а не должен висеть «в воздухе».
+    db.prepare(
+      'UPDATE payments SET cashRegisterId = ? WHERE companyId = ? AND cashRegisterId IS NULL'
+    ).run(existing.id, companyId)
+    return existing
+  }
   const now = getCurrentTime()
   const r = db
     .prepare(
@@ -16,7 +23,11 @@ function ensureDefaultRegister(companyId) {
   `
     )
     .run(companyId, now, now)
-  return db.prepare('SELECT * FROM cash_registers WHERE id = ?').get(r.lastInsertRowid)
+  const created = db.prepare('SELECT * FROM cash_registers WHERE id = ?').get(r.lastInsertRowid)
+  db.prepare(
+    'UPDATE payments SET cashRegisterId = ? WHERE companyId = ? AND cashRegisterId IS NULL'
+  ).run(created.id, companyId)
+  return created
 }
 
 function resolveCashRegisterId(companyId, rawId) {
