@@ -391,12 +391,12 @@ setForm({
         </div>
         <div className='grid grid-cols-2 sm:flex gap-2 w-full sm:w-auto'>
           <button 
-            className='btn secondary w-full'
+            className='btn secondary w-full text-xs sm:text-sm whitespace-nowrap'
             onClick={() => setQuickActionsOpen(!quickActionsOpen)}
           >
             Быстрые действия
           </button>
-          <button className='btn w-full' onClick={() => {
+          <button className='btn w-full text-xs sm:text-sm whitespace-nowrap' onClick={() => {
             setEditingTask(null);
             setForm({
               title: '',

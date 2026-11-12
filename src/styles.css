@@ -100,6 +100,16 @@ body {
 .btn.ghost { @apply bg-transparent border border-border hover:bg-surface/50 text-text; }
 .btn.icon { @apply px-3 py-3 sm:px-2.5 sm:py-2; min-height: 44px; }
 .btn.lg { @apply px-5 py-4 sm:py-3 text-base; min-height: 48px; }
+.btn.hidden { display: none; }
+
+@media (min-width: 640px) {
+  .btn.hidden.sm\:inline-flex { display: inline-flex; }
+}
+
+@media (min-width: 768px) {
+  .btn.hidden.md\:inline-flex { display: inline-flex; }
+}
+
 .table {
   @apply w-full text-sm;
   border-collapse: collapse;

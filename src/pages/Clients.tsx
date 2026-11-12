@@ -261,10 +261,10 @@ export default function Clients() {
           )}
         </div>
         <div className='grid grid-cols-2 sm:flex gap-2 w-full sm:w-auto'>
-          <button className='btn secondary w-full' onClick={() => {}}>
+          <button className='btn secondary w-full text-xs sm:text-sm whitespace-nowrap' onClick={() => {}}>
             Экспорт
           </button>
-          <button className='btn w-full' onClick={() => setShowModal(true)}>
+          <button className='btn w-full text-xs sm:text-sm whitespace-nowrap' onClick={() => setShowModal(true)}>
             Добавить клиента
           </button>
         </div>

@@ -173,7 +173,7 @@ export default function AiParts() {
               <button
                 key={ex}
                 type='button'
-                className='btn secondary text-xs'
+                className='tag min-h-0 px-2.5 py-1.5 text-left'
                 onClick={() => {
                   setQuery(ex)
                   search(ex)

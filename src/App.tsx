@@ -136,9 +136,9 @@ export default function App(){
       )}
 
       {/* Main */}
-      <main className='flex-1 min-w-0 w-full max-w-full overflow-x-clip'>
+      <main className={`flex-1 min-w-0 w-full max-w-full overflow-x-clip ${!isAuthRoute ? 'pt-14 lg:pt-0' : ''}`}>
         {!isAuthRoute && <Topbar refreshKey={loc.pathname} onMenuClick={() => setMobileMenuOpen(true)} />}
-        <div className={`container-page pb-[calc(5rem+env(safe-area-inset-bottom))] lg:pb-8 ${!isAuthRoute ? 'pt-[calc(3.5rem+0.75rem)] lg:pt-8' : ''}`}>
+        <div className='container-page pb-[calc(5rem+env(safe-area-inset-bottom))] lg:pb-8'>
           <Routes>
             <Route path='/login' element={<Login/>} />
             <Route path='/register' element={<Register/>} />
