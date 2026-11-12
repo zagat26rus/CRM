@@ -1010,6 +1010,7 @@ router.post('/sales', requireRole(['owner', 'admin', 'director']), (req, res) =>
       notes = '',
       paymentMethod = 'cash',
       saleCategory = 'tech',
+      cashRegisterId,
       costTotal: costTotalOverride,
       items = [],
     } = req.body || {};
@@ -1019,8 +1020,10 @@ router.post('/sales', requireRole(['owner', 'admin', 'director']), (req, res) =>
     }
 
     const { isSaleCategory } = require('../constants/saleCategories');
+    const { resolveCashRegisterId } = require('../utils/cashRegisters');
     const resolvedSaleCategory = isSaleCategory(saleCategory) ? saleCategory : 'tech';
     const payMethod = String(paymentMethod || 'cash');
+    const registerId = resolveCashRegisterId(req.user.companyId, cashRegisterId);
     const now = getCurrentTime();
     const companyId = req.user.companyId;
 
@@ -1151,17 +1154,17 @@ router.post('/sales', requireRole(['owner', 'admin', 'director']), (req, res) =>
       });
 
       const paymentResult = db.prepare(`
-        INSERT INTO payments (companyId, amount, type, categoryId, description, date, saleCategory, method, createdAt, updatedAt)
-        VALUES (?, ?, 'income', ?, ?, ?, ?, ?, ?, ?)
-      `).run(companyId, total, categoryId, description, now, resolvedSaleCategory, payMethod, now, now);
+        INSERT INTO payments (companyId, amount, type, categoryId, description, date, saleCategory, method, cashRegisterId, createdAt, updatedAt)
+        VALUES (?, ?, 'income', ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(companyId, total, categoryId, description, now, resolvedSaleCategory, payMethod, registerId, now, now);
       const paymentId = paymentResult.lastInsertRowid;
 
       if (costTotal > 0) {
         const costCategoryId = ensureShopCostCategoryId(companyId);
         db.prepare(`
-          INSERT INTO payments (companyId, amount, type, categoryId, description, date, method, createdAt, updatedAt)
-          VALUES (?, ?, 'expense', ?, ?, ?, ?, ?, ?)
-        `).run(companyId, costTotal, costCategoryId, `Себестоимость: ${description}`, now, payMethod, now, now);
+          INSERT INTO payments (companyId, amount, type, categoryId, description, date, method, cashRegisterId, createdAt, updatedAt)
+          VALUES (?, ?, 'expense', ?, ?, ?, ?, ?, ?, ?)
+        `).run(companyId, costTotal, costCategoryId, `Себестоимость: ${description}`, now, payMethod, registerId, now, now);
       }
 
       const saleIds = [];

@@ -20,7 +20,8 @@ const DOC_PREFIXES = {
   cash_out_order: 'РКО',
   warranty_card: 'ГТ',
   acceptance_act: 'АПП',
-  acceptance_warranty: 'АПГ'
+  acceptance_warranty: 'АПГ',
+  tradein_dkp: 'ДКП'
 };
 
 function formatDocumentNumber(docType, year, seq) {
@@ -119,7 +120,8 @@ const DOC_TYPE_LABELS = {
   cash_out_order: 'РКО',
   warranty_card: 'Гарантийный талон',
   acceptance_act: 'Акт приёма-передачи',
-  acceptance_warranty: 'Акт и гарантия'
+  acceptance_warranty: 'Акт и гарантия',
+  tradein_dkp: 'ДКП trade-in'
 };
 
 const { defaultSaleCategoryForDocType, isSaleCategory } = require('../constants/saleCategories');

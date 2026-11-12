@@ -1,6 +1,7 @@
 import { useMemo, useState, useEffect } from 'react'
 import { useLockBodyScroll } from '../hooks/useLockBodyScroll'
 import ClientSuggestInput from '../components/ClientSuggestInput'
+import CashRegisterSelect from '../components/CashRegisterSelect'
 import { useSearchParams } from 'react-router-dom'
 import { apiFetch, isImageAttachment, staticUrl } from '../api'
 import { printRepairReceipt, renderRepairReceiptHtml } from '../repairReceiptTemplate'
@@ -423,7 +424,14 @@ function calculateStatsFromOrders() {
     }
   }
 
-  async function closeOrderWithPayment(order: Order, amount: number, paymentMethod: string, comment?: string, costPrice = 0) {
+  async function closeOrderWithPayment(
+    order: Order,
+    amount: number,
+    paymentMethod: string,
+    comment?: string,
+    costPrice = 0,
+    cashRegisterId?: number | ''
+  ) {
     try {
       const cost = Math.max(0, Number(costPrice) || 0)
       const paymentDescription = comment || `Оплата заказа #${order.id}`
@@ -439,6 +447,7 @@ function calculateStatsFromOrders() {
           method: paymentMethod,
           orderId: order.id,
           saleCategory: 'repair',
+          cashRegisterId: cashRegisterId || undefined,
         })
       });
 
@@ -456,6 +465,7 @@ function calculateStatsFromOrders() {
             type: 'Расход',
             description: `Себестоимость: ${paymentDescription}`,
             orderId: order.id,
+            cashRegisterId: cashRegisterId || undefined,
           })
         })
         if (!costResponse.ok) {
@@ -1641,11 +1651,12 @@ function CloseOrderModal({
 }: { 
   order: Order; 
   onClose: () => void; 
-  onConfirm: (order: Order, amount: number, paymentMethod: string, comment?: string, costPrice?: number) => void;
+  onConfirm: (order: Order, amount: number, paymentMethod: string, comment?: string, costPrice?: number, cashRegisterId?: number | '') => void;
 }) {
   const [amount, setAmount] = useState<number>(order.price || 0);
   const [costPrice, setCostPrice] = useState<number>(order.costPrice || 0);
   const [paymentMethod, setPaymentMethod] = useState<string>('cash');
+  const [cashRegisterId, setCashRegisterId] = useState<number | ''>('');
   const [comment, setComment] = useState<string>(`Оплата заказа #${order.id}`);
   const [loading, setLoading] = useState(false);
   useLockBodyScroll(true)
@@ -1665,7 +1676,7 @@ function CloseOrderModal({
 
     setLoading(true);
     try {
-      await onConfirm(order, amount, paymentMethod, comment, costPrice);
+      await onConfirm(order, amount, paymentMethod, comment, costPrice, cashRegisterId);
     } finally {
       setLoading(false);
     }
@@ -1755,6 +1766,13 @@ function CloseOrderModal({
                 ))}
               </div>
             </div>
+
+            <CashRegisterSelect
+              value={cashRegisterId}
+              onChange={setCashRegisterId}
+              label='Касса зачисления'
+              showBalance
+            />
 
             {/* Комментарий */}
             <div>

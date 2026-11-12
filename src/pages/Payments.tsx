@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react'
 import { apiFetch } from '../api'
 import Select from '../components/Select'
+import CashRegisterSelect from '../components/CashRegisterSelect'
 import { notifyBalanceChanged } from '../utils/balanceEvents'
 import { useAuth } from '../auth'
+import { useCashRegisters } from '../hooks/useCashRegisters'
 
 type Tx = { 
   id: number; 
@@ -15,6 +17,8 @@ type Tx = {
   category?: string;
   categoryIcon?: string;
   categoryId?: number | null;
+  cashRegisterId?: number | null;
+  cashRegisterName?: string | null;
 }
 
 type Category = {
@@ -44,6 +48,7 @@ export default function Payments(){
   const [filterType, setFilterType] = useState('')
   const [filterMethod, setFilterMethod] = useState('')
   const [filterQ, setFilterQ] = useState('')
+  const [filterRegister, setFilterRegister] = useState<number | ''>('')
   
   // Данные для формы
   const [modalSum, setModalSum] = useState('')
@@ -51,17 +56,23 @@ export default function Payments(){
   const [modalComment, setModalComment] = useState('')
   const [modalCategory, setModalCategory] = useState<string>('')
   const [modalMethod, setModalMethod] = useState<string>('card')
+  const [modalRegister, setModalRegister] = useState<number | ''>('')
+  const { defaultId: defaultRegisterId } = useCashRegisters()
   
   // Данные для выпадающих списков
   const [categories, setCategories] = useState<Category[]>([])
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([])
 
   useEffect(() => {
+    if (!modalRegister && defaultRegisterId) setModalRegister(defaultRegisterId)
+  }, [defaultRegisterId, modalRegister])
+
+  useEffect(() => {
     loadPayments();
     loadBalance();
     loadCategories();
     loadPaymentMethods();
-  }, [filterType, filterMethod, filterQ])
+  }, [filterType, filterMethod, filterQ, filterRegister])
 
   async function loadPayments() {
     try {
@@ -70,6 +81,7 @@ export default function Payments(){
       if (filterType) params.set('type', filterType);
       if (filterMethod) params.set('method', filterMethod);
       if (filterQ.trim()) params.set('q', filterQ.trim());
+      if (filterRegister) params.set('cashRegisterId', String(filterRegister));
       const qs = params.toString();
       const response = await apiFetch(`/payments${qs ? `?${qs}` : ''}`);
       const data = await response.json();
@@ -169,6 +181,7 @@ async function updatePayment() {
         description: modalComment || editing.type,
         categoryId: modalCategory || undefined,
         method: modalMethod || 'card',
+        cashRegisterId: modalRegister || undefined,
       }),
     });
     const data = await response.json();
@@ -190,6 +203,7 @@ function openEdit(row: Tx) {
   setModalComment(row.comment || '');
   setModalCategory(row.categoryId ? String(row.categoryId) : '');
   setModalMethod(row.methodId || paymentMethods.find((m) => m.name === row.method)?.id || 'card');
+  setModalRegister(row.cashRegisterId || defaultRegisterId || '');
   setModalCost('');
 }
 async function addTx(
@@ -198,7 +212,8 @@ async function addTx(
   categoryId?: string, 
   method?: string, 
   comment?: string,
-  cost = 0
+  cost = 0,
+  cashRegisterId?: number | ''
 ) {
   try {
     const methodObj = paymentMethods.find(m => m.id === method);
@@ -215,7 +230,8 @@ async function addTx(
         type: type,
         description,
         categoryId: categoryId || undefined,
-        method: method || 'card'
+        method: method || 'card',
+        cashRegisterId: cashRegisterId || undefined,
       })
     });
 
@@ -233,6 +249,7 @@ async function addTx(
           amount: cost,
           type: 'Расход',
           description: `Себестоимость: ${description}`,
+          cashRegisterId: cashRegisterId || undefined,
         })
       })
       if (!costResponse.ok) {
@@ -266,7 +283,7 @@ async function addTx(
     const amount = parseFloat(modalSum);
     if (!isNaN(amount) && amount > 0) {
       const cost = open === 'Приход' ? Math.max(0, parseFloat(modalCost) || 0) : 0
-      addTx(open, amount, modalCategory, modalMethod, modalComment, cost);
+      addTx(open, amount, modalCategory, modalMethod, modalComment, cost, modalRegister);
     } else {
       alert('Введите корректную сумму');
     }
@@ -280,6 +297,7 @@ async function addTx(
     setModalComment('');
     setModalCategory('');
     setModalMethod('card');
+    setModalRegister(defaultRegisterId || '');
   };
 
   const filteredCategories = categories.filter(cat => {
@@ -345,7 +363,14 @@ async function addTx(
                 ))}
               </Select>
             </div>
-            <div className='md:col-span-2'>
+            <CashRegisterSelect
+              value={filterRegister}
+              onChange={setFilterRegister}
+              label='Касса'
+              allowEmpty
+              showBalance
+            />
+            <div>
               <label className='label text-xs'>Поиск по комментарию</label>
               <input className='input' value={filterQ} onChange={(e) => setFilterQ(e.target.value)} placeholder='Текст операции…' />
             </div>
@@ -520,6 +545,13 @@ async function addTx(
                     ))}
                   </div>
                 </div>
+
+                <CashRegisterSelect
+                  value={modalRegister}
+                  onChange={setModalRegister}
+                  label={open === 'Расход' || editing?.type === 'Расход' ? 'Касса списания' : 'Касса зачисления'}
+                  showBalance
+                />
                 
                 {/* Комментарий */}
                 <div>

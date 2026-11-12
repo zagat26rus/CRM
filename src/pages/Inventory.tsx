@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import Modal from '../components/Modal'
 import Select from '../components/Select'
+import TradeInModal from '../components/TradeInModal'
 import { useToast } from '../utils'
 import { apiFetch, apiUrl } from '../api'
 import { notifyBalanceChanged } from '../utils/balanceEvents'
@@ -63,6 +64,7 @@ export default function Inventory() {
   const [warehouseFilter, setWarehouseFilter] = useState<string>('')
 
   const [openAdd, setOpenAdd] = useState(false)
+  const [openTradeIn, setOpenTradeIn] = useState(false)
   const [sellItem, setSellItem] = useState<InventoryItem | null>(null)
   const [openAddSupplier, setOpenAddSupplier] = useState(false)
   const [openAddCategory, setOpenAddCategory] = useState(false)
@@ -540,11 +542,23 @@ export default function Inventory() {
           <button className='btn secondary w-full sm:w-auto' onClick={() => setOpenAddWarehouse(true)}>
             + Склад
           </button>
+          <button className='btn secondary w-full sm:w-auto col-span-2 sm:col-span-1' onClick={() => setOpenTradeIn(true)}>
+            Принять устройство
+          </button>
           <button className='btn w-full sm:w-auto' onClick={() => setOpenAdd(true)}>
             + Товар
           </button>
         </div>
       </div>
+
+      {openTradeIn && (
+        <TradeInModal
+          onClose={() => setOpenTradeIn(false)}
+          onDone={() => {
+            void loadItems(search)
+          }}
+        />
+      )}
 
       <div className='grid md:grid-cols-4 gap-4'>
         {/* Left: summary */}

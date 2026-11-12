@@ -349,6 +349,76 @@ function migrateLegacySchema() {
       }
     });
   }
+
+  // Кассы компании
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS cash_registers (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      companyId INTEGER NOT NULL,
+      name TEXT NOT NULL,
+      type TEXT DEFAULT 'cash',
+      isDefault INTEGER DEFAULT 0,
+      isActive INTEGER DEFAULT 1,
+      createdAt TEXT,
+      updatedAt TEXT,
+      FOREIGN KEY (companyId) REFERENCES companies(id) ON DELETE CASCADE
+    );
+  `);
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_cash_registers_companyId ON cash_registers(companyId);`);
+
+  addColumnIfMissing('payments', 'cashRegisterId INTEGER DEFAULT NULL');
+  addColumnIfMissing('inventory_items', 'imei TEXT DEFAULT ""');
+  addColumnIfMissing('inventory_items', 'imei2 TEXT DEFAULT ""');
+  addColumnIfMissing('inventory_items', 'serialNumber TEXT DEFAULT ""');
+  addColumnIfMissing('inventory_items', 'conditionGrade TEXT DEFAULT ""');
+  addColumnIfMissing('inventory_items', 'conditionNotes TEXT DEFAULT ""');
+  addColumnIfMissing('inventory_items', 'source TEXT DEFAULT ""');
+  addColumnIfMissing('inventory_items', 'brand TEXT DEFAULT ""');
+  addColumnIfMissing('inventory_items', 'model TEXT DEFAULT ""');
+  addColumnIfMissing('inventory_items', 'color TEXT DEFAULT ""');
+  addColumnIfMissing('inventory_items', 'memory TEXT DEFAULT ""');
+  addColumnIfMissing('inventory_items', 'tradeInDocumentId INTEGER DEFAULT NULL');
+  addColumnIfMissing('inventory_items', 'tradeInClientId INTEGER DEFAULT NULL');
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS trade_ins (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      companyId INTEGER NOT NULL,
+      clientId INTEGER DEFAULT NULL,
+      inventoryItemId INTEGER DEFAULT NULL,
+      documentId INTEGER DEFAULT NULL,
+      paymentId INTEGER DEFAULT NULL,
+      cashRegisterId INTEGER DEFAULT NULL,
+      buyPrice REAL DEFAULT 0,
+      sellerName TEXT DEFAULT '',
+      sellerPhone TEXT DEFAULT '',
+      sellerPassport TEXT DEFAULT '',
+      sellerAddress TEXT DEFAULT '',
+      deviceJson TEXT DEFAULT '{}',
+      createdAt TEXT,
+      updatedAt TEXT,
+      FOREIGN KEY (companyId) REFERENCES companies(id) ON DELETE CASCADE
+    );
+  `);
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_trade_ins_companyId ON trade_ins(companyId);`);
+
+  // Для каждой компании — хотя бы одна касса по умолчанию
+  try {
+    const companies = db.prepare('SELECT id FROM companies').all();
+    const now = new Date().toISOString();
+    const hasDefault = db.prepare(
+      'SELECT id FROM cash_registers WHERE companyId = ? AND isDefault = 1 LIMIT 1'
+    );
+    const insertDefault = db.prepare(`
+      INSERT INTO cash_registers (companyId, name, type, isDefault, isActive, createdAt, updatedAt)
+      VALUES (?, 'Основная касса', 'cash', 1, 1, ?, ?)
+    `);
+    for (const c of companies) {
+      if (!hasDefault.get(c.id)) insertDefault.run(c.id, now, now);
+    }
+  } catch (e) {
+    console.error('Ошибка seed касс:', e);
+  }
 }
 
 // Создание всех таблиц (актуальная схема)

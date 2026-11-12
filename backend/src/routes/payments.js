@@ -3,6 +3,7 @@ const router = express.Router();
 const { db, getCurrentTime } = require('../config/database');
 const { requireAuth } = require('../middlewares/auth');
 const { requireFinance } = require('../middlewares/rbac');
+const { resolveCashRegisterId } = require('../utils/cashRegisters');
 
 router.use(requireAuth);
 
@@ -37,6 +38,8 @@ function formatPaymentRow(p) {
     categoryIcon: p.categoryIcon || '',
     categoryId: p.categoryId || null,
     orderId: p.orderId || null,
+    cashRegisterId: p.cashRegisterId || null,
+    cashRegisterName: p.cashRegisterName || null,
   };
 }
 
@@ -51,6 +54,7 @@ router.get('/', (req, res) => {
       from,
       to,
       q,
+      cashRegisterId,
     } = req.query;
 
     const conditions = ['p.companyId = ?'];
@@ -67,6 +71,11 @@ router.get('/', (req, res) => {
     if (method) {
       conditions.push('p.method = ?');
       params.push(resolveMethodId(method));
+    }
+
+    if (cashRegisterId) {
+      conditions.push('p.cashRegisterId = ?');
+      params.push(Number(cashRegisterId));
     }
 
     if (from) {
@@ -94,9 +103,11 @@ router.get('/', (req, res) => {
       SELECT 
         p.*,
         c.name as categoryName,
-        c.icon as categoryIcon
+        c.icon as categoryIcon,
+        cr.name as cashRegisterName
       FROM payments p
       LEFT JOIN categories c ON p.categoryId = c.id
+      LEFT JOIN cash_registers cr ON p.cashRegisterId = cr.id
       WHERE ${where}
       ORDER BY p.date DESC, p.createdAt DESC
       LIMIT ? OFFSET ?
@@ -122,7 +133,7 @@ router.get('/', (req, res) => {
 // Создание платежа
 router.post('/', requireFinance, (req, res) => {
   try {
-    const { amount, type, description, categoryId, method, orderId, saleCategory } = req.body;
+    const { amount, type, description, categoryId, method, orderId, saleCategory, cashRegisterId } = req.body;
 
     if (!amount || amount <= 0) {
       return res.status(400).json({ error: 'Введите корректную сумму' });
@@ -133,6 +144,7 @@ router.post('/', requireFinance, (req, res) => {
 
     const backendType = type === 'Приход' ? 'income' : 'expense';
     const methodId = resolveMethodId(method);
+    const registerId = resolveCashRegisterId(req.user.companyId, cashRegisterId);
 
     let finalCategoryId = categoryId;
     if (!categoryId) {
@@ -174,8 +186,8 @@ router.post('/', requireFinance, (req, res) => {
       .prepare(
         `
       INSERT INTO payments 
-      (companyId, amount, type, categoryId, description, date, orderId, saleCategory, method, createdAt, updatedAt)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      (companyId, amount, type, categoryId, description, date, orderId, saleCategory, method, cashRegisterId, createdAt, updatedAt)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `
       )
       .run(
@@ -188,11 +200,17 @@ router.post('/', requireFinance, (req, res) => {
         linkedOrderId,
         resolvedSaleCategory,
         methodId,
+        registerId,
         now,
         now
       );
 
-    const payment = db.prepare('SELECT * FROM payments WHERE id = ? AND companyId = ?').get(result.lastInsertRowid, req.user.companyId);
+    const payment = db.prepare(`
+      SELECT p.*, cr.name as cashRegisterName
+      FROM payments p
+      LEFT JOIN cash_registers cr ON p.cashRegisterId = cr.id
+      WHERE p.id = ? AND p.companyId = ?
+    `).get(result.lastInsertRowid, req.user.companyId);
 
     res.status(201).json({
       ...formatPaymentRow({ ...payment, categoryName, categoryIcon }),
@@ -210,9 +228,14 @@ router.put('/:id', requireFinance, (req, res) => {
     const existing = db.prepare('SELECT * FROM payments WHERE id = ? AND companyId = ?').get(id, req.user.companyId);
     if (!existing) return res.status(404).json({ error: 'Платеж не найден' });
 
-    const { amount, type, description, categoryId, method } = req.body || {};
+    const { amount, type, description, categoryId, method, cashRegisterId } = req.body || {};
     const fields = [];
     const params = [];
+
+    if (cashRegisterId !== undefined) {
+      fields.push('cashRegisterId = ?');
+      params.push(resolveCashRegisterId(req.user.companyId, cashRegisterId));
+    }
 
     if (amount !== undefined) {
       const n = Number(amount);

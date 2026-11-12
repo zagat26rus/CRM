@@ -34,12 +34,12 @@ type InviteRow = {
 export default function Settings() {
   const auth = useAuth()
   const toast = useToast()
-  const [panel, setPanel] = useState<null | 'company' | 'profile' | 'staff' | 'integrations' | 'telegram' | 'invoices' | 'orders'>(null)
+  const [panel, setPanel] = useState<null | 'company' | 'profile' | 'staff' | 'integrations' | 'telegram' | 'invoices' | 'orders' | 'cash'>(null)
 
   const sections = [
     { title: 'Компания', items: ['Общее', 'Сотрудники', 'Ваш профиль'] },
     { title: 'Заказы', items: ['Статусы'] },
-    { title: 'Платежи', items: ['Методы оплаты'] },
+    { title: 'Платежи', items: ['Кассы', 'Методы оплаты'] },
     { title: 'Документы', items: ['Шаблоны квитанций'] },
     { title: 'Интеграции', items: ['Telegram-бот', 'API и Webhook'] }
   ]
@@ -52,7 +52,8 @@ export default function Settings() {
     if (item === 'API и Webhook') return setPanel('integrations')
     if (item === 'Шаблоны квитанций') return setPanel('invoices')
     if (item === 'Статусы') return setPanel('orders')
-    if (item === 'Методы оплаты') return toast.push('Список методов: карта, наличные, перевод, онлайн — настраивается в платежах')
+    if (item === 'Кассы') return setPanel('cash')
+    if (item === 'Методы оплаты') return toast.push('Методы: карта, наличные, перевод, онлайн. Кассу выбираете при каждом платеже.')
   }
 
   return (
@@ -90,7 +91,157 @@ export default function Settings() {
       {panel === 'telegram' && <TelegramBotModal onClose={() => setPanel(null)} />}
       {panel === 'invoices' && <InvoiceTemplatesModal onClose={() => setPanel(null)} />}
       {panel === 'orders' && <OrderSettingsModal onClose={() => setPanel(null)} />}
+      {panel === 'cash' && <CashRegistersModal onClose={() => setPanel(null)} />}
     </div>
+  )
+}
+
+function CashRegistersModal({ onClose }: { onClose: () => void }) {
+  const auth = useAuth()
+  const toast = useToast()
+  const canEdit = ['owner', 'admin'].includes(auth.user?.role || '')
+  const [rows, setRows] = useState<Array<{ id: number; name: string; type: string; isDefault: boolean; isActive: boolean; balance?: number }>>([])
+  const [loading, setLoading] = useState(true)
+  const [name, setName] = useState('')
+  const [saving, setSaving] = useState(false)
+
+  async function load() {
+    setLoading(true)
+    try {
+      const res = await apiFetch('/cash-registers?all=1')
+      const data = await res.json()
+      if (!res.ok) throw new Error(data?.error || 'Ошибка')
+      setRows(Array.isArray(data) ? data : [])
+    } catch (e: any) {
+      toast.push(e?.message || 'Не удалось загрузить кассы')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    void load()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  async function addRegister() {
+    if (!canEdit) return
+    const n = name.trim()
+    if (!n) return toast.push('Укажите название')
+    setSaving(true)
+    try {
+      const res = await apiFetch('/cash-registers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: n, type: 'cash' }),
+      })
+      const data = await res.json().catch(() => null)
+      if (!res.ok) throw new Error(data?.error || 'Ошибка')
+      setName('')
+      toast.push('Касса добавлена')
+      await load()
+    } catch (e: any) {
+      toast.push(e?.message || 'Не удалось создать')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function setDefault(id: number) {
+    if (!canEdit) return
+    try {
+      const res = await apiFetch(`/cash-registers/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isDefault: true }),
+      })
+      if (!res.ok) {
+        const data = await res.json().catch(() => null)
+        throw new Error(data?.error || 'Ошибка')
+      }
+      await load()
+    } catch (e: any) {
+      toast.push(e?.message || 'Не удалось назначить')
+    }
+  }
+
+  async function toggleActive(id: number, isActive: boolean) {
+    if (!canEdit) return
+    try {
+      const res = await apiFetch(`/cash-registers/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isActive }),
+      })
+      if (!res.ok) {
+        const data = await res.json().catch(() => null)
+        throw new Error(data?.error || 'Ошибка')
+      }
+      await load()
+    } catch (e: any) {
+      toast.push(e?.message || 'Не удалось изменить')
+    }
+  }
+
+  return (
+    <Modal title='Кассы' onClose={onClose}>
+      <div className='space-y-4'>
+        <p className='text-sm text-muted'>
+          Несколько касс для разнесения приходов и расходов. При приёме платежа выбираете, в какую кассу зачислить.
+        </p>
+
+        {loading ? (
+          <div className='text-muted'>Загрузка…</div>
+        ) : (
+          <div className='space-y-2'>
+            {rows.map((r) => (
+              <div key={r.id} className='p-3 rounded-xl border border-border flex flex-col sm:flex-row sm:items-center gap-2 justify-between'>
+                <div className='min-w-0'>
+                  <div className='font-medium'>
+                    {r.name}
+                    {r.isDefault ? <span className='text-xs text-primary ml-2'>основная</span> : null}
+                    {!r.isActive ? <span className='text-xs text-muted ml-2'>отключена</span> : null}
+                  </div>
+                  <div className='text-sm text-muted'>
+                    Остаток: {(r.balance ?? 0).toLocaleString('ru-RU')} ₽
+                  </div>
+                </div>
+                {canEdit ? (
+                  <div className='flex flex-wrap gap-2 shrink-0'>
+                    {!r.isDefault && r.isActive ? (
+                      <button className='btn secondary text-sm' onClick={() => setDefault(r.id)}>
+                        Сделать основной
+                      </button>
+                    ) : null}
+                    {!r.isDefault ? (
+                      <button className='btn ghost text-sm' onClick={() => toggleActive(r.id, !r.isActive)}>
+                        {r.isActive ? 'Отключить' : 'Включить'}
+                      </button>
+                    ) : null}
+                  </div>
+                ) : null}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {canEdit ? (
+          <div className='flex flex-col sm:flex-row gap-2 pt-2 border-t border-border'>
+            <input
+              className='input flex-1'
+              placeholder='Название новой кассы'
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+            />
+            <button className='btn' disabled={saving} onClick={addRegister}>
+              Добавить
+            </button>
+          </div>
+        ) : (
+          <p className='text-xs text-muted'>Изменять кассы могут owner/admin</p>
+        )}
+      </div>
+    </Modal>
   )
 }
 

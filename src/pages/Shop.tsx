@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import Modal from '../components/Modal'
 import Select from '../components/Select'
+import CashRegisterSelect from '../components/CashRegisterSelect'
 import { useToast } from '../utils'
 import { apiFetch } from '../api'
 import { notifyBalanceChanged } from '../utils/balanceEvents'
@@ -122,6 +123,7 @@ export default function Shop() {
   const [clientEmail, setClientEmail] = useState('')
   const [notes, setNotes] = useState('')
   const [paymentMethod, setPaymentMethod] = useState('cash')
+  const [cashRegisterId, setCashRegisterId] = useState<number | ''>('')
   const [saleCategory, setSaleCategory] = useState<SaleCategoryId>('tech')
   const [printAfter, setPrintAfter] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -367,6 +369,7 @@ export default function Shop() {
           notes: notes.trim(),
           paymentMethod,
           saleCategory,
+          cashRegisterId: cashRegisterId || undefined,
           items: cart.map((l) => ({
             itemId: l.itemId,
             quantity: l.quantity,
@@ -1142,6 +1145,13 @@ export default function Shop() {
                 ))}
               </div>
             </div>
+
+            <CashRegisterSelect
+              value={cashRegisterId}
+              onChange={setCashRegisterId}
+              label='Касса зачисления'
+              showBalance
+            />
 
             <div>
               <label className='label'>Комментарий</label>

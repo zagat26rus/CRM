@@ -67,12 +67,16 @@ const warrantiesRoutes = require('./routes/warranties');
 const publicTrackRoutes = require('./routes/publicTrack');
 const aiRoutes = require('./routes/ai');
 const digestRoutes = require('./routes/digest');
+const cashRegistersRoutes = require('./routes/cashRegisters');
+const tradeinRoutes = require('./routes/tradein');
 
 // Подключаем маршруты
 app.use('/api/public', publicTrackRoutes);
 app.use('/api/tasks', taskRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/payments', paymentRoutes);
+app.use('/api/cash-registers', cashRegistersRoutes);
+app.use('/api/tradein', tradeinRoutes);
 app.use('/api/brands', brandRoutes);
 app.use('/api/problems', problemRoutes);
 app.use('/api/categories', categoryRoutes);
