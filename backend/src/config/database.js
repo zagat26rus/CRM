@@ -93,6 +93,12 @@ function migrateLegacySchema() {
   addColumnIfMissing('orders', 'warrantyEndsAt TEXT DEFAULT NULL');
   addColumnIfMissing('orders', 'warrantyDays INTEGER DEFAULT 0');
   addColumnIfMissing('orders', 'partsWrittenOff BOOLEAN DEFAULT 0');
+  addColumnIfMissing('orders', 'clientSignatureUrl TEXT DEFAULT ""');
+  addColumnIfMissing('orders', 'clientSignedAt TEXT DEFAULT NULL');
+  addColumnIfMissing('orders', 'acceptanceTermsVersion TEXT DEFAULT ""');
+  addColumnIfMissing('orders', 'acceptanceSnapshot TEXT DEFAULT "{}"');
+  addColumnIfMissing('orders', 'publicToken TEXT DEFAULT ""');
+  db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_orders_public_token ON orders(publicToken) WHERE publicToken IS NOT NULL AND publicToken != '';`);
   addColumnIfMissing('companies', 'settingsJson TEXT DEFAULT "{}"');
   addColumnIfMissing('company_documents', 'costTotal REAL DEFAULT 0');
 

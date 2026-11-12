@@ -1,4 +1,5 @@
 import { openPrintWindow } from './printWindow'
+import { PUBLIC_SITE_URL } from './config'
 
 export type RepairReceiptInput = {
   company?: {
@@ -17,6 +18,8 @@ export type RepairReceiptInput = {
     id: number
     documentNumber?: string
     publicToken?: string
+    clientSignatureUrl?: string
+    clientSignedAt?: string | null
     client: string
     phone: string
     email?: string
@@ -117,15 +120,16 @@ export function renderRepairReceiptHtml(input: RepairReceiptInput) {
     .filter(Boolean)
     .join(', ') || 'без особых отметок'
 
-  const TRACK_HOST = 'https://fedfix.ru'
   const trackUrl =
     input.trackUrl ||
     (o.publicToken
-      ? `${TRACK_HOST}/track/${o.publicToken}`
+      ? `${PUBLIC_SITE_URL}/track/${o.publicToken}`
       : '')
   const qrSrc = trackUrl
     ? `https://api.qrserver.com/v1/create-qr-code/?size=140x140&margin=6&data=${encodeURIComponent(trackUrl)}`
     : ''
+  const clientSignature = String(o.clientSignatureUrl || '').trim()
+  const signedAt = o.clientSignedAt ? fmtDateTime(o.clientSignedAt) : ''
 
   const body = `
 <div class="sheet">
@@ -200,8 +204,13 @@ export function renderRepairReceiptHtml(input: RepairReceiptInput) {
   <section class="signs">
     <div class="sign">
       <div class="sign-title">Клиент</div>
-      <div class="sign-line"></div>
-      <div class="sign-cap">подпись / расшифровка / дата</div>
+      ${
+        clientSignature
+          ? `<div class="signature-image-wrap"><img class="signature-image" src="${esc(clientSignature)}" alt="Подпись клиента" /></div>
+             <div class="sign-cap">${val(o.client)} · ${val(signedAt)}</div>`
+          : `<div class="sign-line"></div>
+             <div class="sign-cap">подпись / расшифровка / дата</div>`
+      }
     </div>
     <div class="sign">
       <div class="sign-title">Представитель «ФиксНэт»</div>
@@ -257,6 +266,8 @@ export function renderRepairReceiptHtml(input: RepairReceiptInput) {
   .signs { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 4px; }
   .sign-title { font-weight: 700; margin-bottom: 12px; font-size: 9pt; }
   .sign-line { border-bottom: 1px solid #0f172a; height: 14px; }
+  .signature-image-wrap { height: 18mm; border-bottom: 1px solid #0f172a; display: flex; align-items: flex-end; justify-content: center; overflow: hidden; }
+  .signature-image { max-width: 95%; max-height: 17mm; object-fit: contain; }
   .sign-cap { font-size: 7pt; color: #94a3b8; margin-top: 3px; text-align: center; }
   .foot { margin-top: 8px; font-size: 7pt; color: #94a3b8; text-align: center; }
   @media print {

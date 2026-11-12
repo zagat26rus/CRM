@@ -21,7 +21,7 @@ const DEFAULT_CLIENT_SMS = {
     password: '',
     sender: '',
   },
-  publicBaseUrl: 'https://fedfix.ru',
+  publicBaseUrl: 'https://www.fedfix.ru',
   onIntake: true,
   onReady: true,
   includeReviewOnReady: false,

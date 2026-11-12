@@ -2,8 +2,10 @@ import { useMemo, useState, useEffect } from 'react'
 import { useLockBodyScroll } from '../hooks/useLockBodyScroll'
 import ClientSuggestInput from '../components/ClientSuggestInput'
 import CashRegisterSelect from '../components/CashRegisterSelect'
+import ClientSignaturePad from '../components/ClientSignaturePad'
 import { useSearchParams } from 'react-router-dom'
 import { apiFetch, isImageAttachment, staticUrl } from '../api'
+import { PUBLIC_SITE_URL } from '../config'
 import { printRepairReceipt, renderRepairReceiptHtml } from '../repairReceiptTemplate'
 import Select from '../components/Select'
 import DeviceCatalogFields from '../components/DeviceCatalogFields'
@@ -28,6 +30,10 @@ import type { OrderPartLine } from '../utils/notifyClient'
 
 type Order = {
   id?: number;
+  documentNumber?: string;
+  publicToken?: string;
+  clientSignatureUrl?: string;
+  clientSignedAt?: string | null;
   client: string;
   phone: string;
   clientAddress?: string;
@@ -403,6 +409,7 @@ function calculateStatsFromOrders() {
       const raw = data.order || {}
       const order = {
         ...raw,
+        clientSignatureUrl: raw.clientSignatureUrl ? staticUrl(raw.clientSignatureUrl) : '',
         inspection:
           typeof raw.inspection === 'string' ? JSON.parse(raw.inspection || '{}') : raw.inspection || {},
         wishes: typeof raw.wishes === 'string' ? JSON.parse(raw.wishes || '{}') : raw.wishes || {},
@@ -419,7 +426,7 @@ function calculateStatsFromOrders() {
           inn: data.company?.inn,
         },
         order,
-        documentDate: data.invoiceDate,
+        documentDate: raw.clientSignedAt || data.invoiceDate,
       })
       const ok = printRepairReceipt(html)
       if (!ok) {
@@ -1206,7 +1213,6 @@ function calculateStatsFromOrders() {
           onSave={(newOrder) => { 
             setRows([newOrder, ...rows]); 
             loadStats(); 
-            setOpen(false); 
           }}
           onPrint={(orderId) => printRepairInvoice(orderId)}
           brands={brands}
@@ -1934,6 +1940,9 @@ function OrderModal({
     price: '', costPrice: '', description: '', issueSubtype: '', warranty: false, onSite: false, paymentMethod: 'cash'
   });
   const [printAfterSave, setPrintAfterSave] = useState(true)
+  const [signatureOpen, setSignatureOpen] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [createdOrder, setCreatedOrder] = useState<Order | null>(null)
   const catalog = useDeviceCatalog()
   useLockBodyScroll(true)
 
@@ -2043,12 +2052,22 @@ function OrderModal({
     }))
   }
 
-  const handleSubmit = async () => {
+  const validateRequired = () => {
+    if (!form.client.trim() || !form.phone.trim()) {
+      alert('Укажите ФИО и телефон клиента')
+      return false
+    }
+    if (!form.problem.trim()) {
+      alert('Укажите неисправность')
+      return false
+    }
+    return true
+  }
+
+  const handleSubmit = async (clientSignatureData = '') => {
+    if (!validateRequired() || saving) return
     try {
-      if (!form.problem.trim()) {
-        alert('Укажите неисправность')
-        return
-      }
+      setSaving(true)
 
       const problemDescription = [form.issueSubtype?.trim(), form.description?.trim()]
         .filter(Boolean)
@@ -2083,6 +2102,7 @@ function OrderModal({
           price: totalPrice,
           costPrice: totalCostPrice,
           clientId: selectedClientId || undefined,
+          clientSignatureData: clientSignatureData || undefined,
           createdAt: new Date().toISOString()
         })
       });
@@ -2094,13 +2114,21 @@ function OrderModal({
 
       const newOrder = await response.json();
       onSave(newOrder);
-      if (printAfterSave && newOrder?.id) {
+      if (clientSignatureData) {
+        setSignatureOpen(false)
+        setCreatedOrder(newOrder)
+      } else if (printAfterSave && newOrder?.id) {
         // Не блокируем закрытие модалки — просто открываем печать в новой вкладке
         try { onPrint(Number(newOrder.id)) } catch {}
+        onClose()
+      } else {
+        onClose()
       }
     } catch (error: any) {
       alert(error.message || 'Ошибка при создании заказа');
       console.error(error);
+    } finally {
+      setSaving(false)
     }
   };
 
@@ -2139,6 +2167,57 @@ function OrderModal({
     { value: 'online', label: 'Онлайн' },
     { value: 'invoice', label: 'Счет' }
   ];
+
+  if (createdOrder?.id && createdOrder.publicToken) {
+    const trackUrl = `${PUBLIC_SITE_URL}/track/${createdOrder.publicToken}`
+    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=260x260&margin=10&data=${encodeURIComponent(trackUrl)}`
+    return (
+      <div className='modal-overlay'>
+        <div className='modal-panel max-w-lg'>
+          <div className='card-inner text-center space-y-5'>
+            <div>
+              <div className='text-4xl mb-2'>✓</div>
+              <h2 className='modal-title'>Заявка подписана</h2>
+              <p className='text-sm text-muted mt-1'>
+                Заявка № {createdOrder.documentNumber || createdOrder.id} создана, подпись сохранена
+              </p>
+            </div>
+            <img
+              src={qrUrl}
+              alt='QR-код отслеживания заявки'
+              className='w-52 h-52 mx-auto rounded-xl bg-white p-2 border border-border'
+            />
+            <div className='rounded-xl border border-border bg-surface p-3 text-left'>
+              <div className='text-xs text-muted mb-1'>Ссылка клиента</div>
+              <div className='text-sm break-all'>{trackUrl}</div>
+            </div>
+            <div className='grid grid-cols-2 gap-2'>
+              <button
+                type='button'
+                className='btn secondary'
+                onClick={async () => {
+                  try {
+                    await navigator.clipboard.writeText(trackUrl)
+                  } catch {}
+                }}
+              >
+                Копировать ссылку
+              </button>
+              <a className='btn secondary' href={trackUrl} target='_blank' rel='noreferrer'>
+                Открыть
+              </a>
+              <button type='button' className='btn secondary' onClick={() => onPrint(Number(createdOrder.id))}>
+                Печать
+              </button>
+              <button type='button' className='btn' onClick={onClose}>
+                Готово
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className='modal-overlay'>
@@ -2356,13 +2435,22 @@ function OrderModal({
               />
               <span className='text-sm'>Печатать квитанцию после сохранения</span>
             </label>
-            <button className='btn secondary order-2 sm:order-1' onClick={onClose}>Отмена</button>
-            <button 
-              className='btn order-1 sm:order-2 flex-1 sm:flex-initial' 
-              onClick={handleSubmit} 
-              disabled={!form.client || !form.phone || !form.problem.trim()}
+            <button className='btn ghost order-3 sm:order-1' onClick={onClose}>Отмена</button>
+            <button
+              className='btn secondary order-2'
+              onClick={() => void handleSubmit()}
+              disabled={saving || !form.client || !form.phone || !form.problem.trim()}
             >
-              Создать заявку
+              {saving ? 'Создание…' : 'Без подписи'}
+            </button>
+            <button
+              className='btn order-1 sm:order-3 flex-1 sm:flex-initial'
+              onClick={() => {
+                if (validateRequired()) setSignatureOpen(true)
+              }}
+              disabled={saving || !form.client || !form.phone || !form.problem.trim()}
+            >
+              Подписать
             </button>
           </div>
         </div>
@@ -2453,6 +2541,14 @@ function OrderModal({
             </div>
           </div>
         </div>
+      )}
+
+      {signatureOpen && (
+        <ClientSignaturePad
+          clientName={form.client}
+          onCancel={() => setSignatureOpen(false)}
+          onConfirm={(signatureData) => void handleSubmit(signatureData)}
+        />
       )}
     </div>
   );

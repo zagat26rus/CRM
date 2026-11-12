@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { apiUrl, isImageAttachment, staticUrl } from '../api'
+import { renderRepairReceiptHtml } from '../repairReceiptTemplate'
 
 type TrackData = {
   order: {
@@ -20,6 +21,16 @@ type TrackData = {
     problems?: { name?: string; description?: string }[]
   }
   service: { name: string; address: string; phone: string; email: string; workHours: string }
+  acceptanceDocument?: {
+    id: number
+    documentNumber?: string
+    publicToken?: string
+    client: string
+    phone: string
+    clientSignatureUrl: string
+    clientSignedAt: string
+    [key: string]: any
+  } | null
   attachments: { name: string; url: string; mime?: string; createdAt?: string; message?: string }[]
   timeline: { type: string; message: string; createdAt: string }[]
 }
@@ -35,6 +46,7 @@ export default function Track() {
   const [data, setData] = useState<TrackData | null>(null)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
+  const [showDocument, setShowDocument] = useState(false)
 
   useEffect(() => {
     document.title = 'Статус ремонта — FixNet'
@@ -60,6 +72,24 @@ export default function Track() {
   const device = [o?.brand, o?.model].filter(Boolean).join(' ') || o?.deviceType || ''
   const works = (o?.problems || []).map((p) => p.name || p.description).filter(Boolean)
   const photos = (data?.attachments || []).filter((a) => isImageAttachment(a))
+  const receiptHtml = useMemo(() => {
+    if (!data?.acceptanceDocument) return ''
+    const document = {
+      ...data.acceptanceDocument,
+      clientSignatureUrl: staticUrl(data.acceptanceDocument.clientSignatureUrl),
+    }
+    return renderRepairReceiptHtml({
+      company: {
+        name: data.service.name,
+        postalAddress: data.service.address,
+        phone: data.service.phone,
+        email: data.service.email,
+        workHours: data.service.workHours,
+      },
+      order: document as any,
+      documentDate: document.clientSignedAt || document.createdAt,
+    })
+  }, [data])
 
   return (
     <div className='min-h-screen bg-bg text-text'>
@@ -158,6 +188,38 @@ export default function Track() {
                       </a>
                     ))}
                   </div>
+                </div>
+              </div>
+            )}
+
+            {data.acceptanceDocument && (
+              <div className='card'>
+                <div className='card-inner space-y-3'>
+                  <div className='flex items-center justify-between gap-3'>
+                    <div>
+                      <div className='font-semibold'>Документ приёмки</div>
+                      <div className='text-xs text-muted'>
+                        Подписан клиентом {fmt(data.acceptanceDocument.clientSignedAt)}
+                      </div>
+                    </div>
+                    <button className='btn secondary text-sm' onClick={() => setShowDocument((v) => !v)}>
+                      {showDocument ? 'Скрыть' : 'Открыть'}
+                    </button>
+                  </div>
+                  <div className='rounded-xl bg-white border border-border p-2'>
+                    <img
+                      src={staticUrl(data.acceptanceDocument.clientSignatureUrl)}
+                      alt='Подпись клиента'
+                      className='h-20 max-w-full object-contain mx-auto'
+                    />
+                  </div>
+                  {showDocument && receiptHtml && (
+                    <iframe
+                      title='Подписанный документ приёмки'
+                      srcDoc={receiptHtml}
+                      className='w-full h-[760px] rounded-xl border border-border bg-white'
+                    />
+                  )}
                 </div>
               </div>
             )}

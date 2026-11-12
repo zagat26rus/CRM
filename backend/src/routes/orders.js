@@ -73,10 +73,40 @@ function orderUploadDir(orderId) {
   return path.join(__dirname, '..', '..', 'uploads', 'orders', String(orderId));
 }
 
+function privateSignaturePath(orderId) {
+  return path.join(__dirname, '..', '..', 'data', 'signatures', `order-${Number(orderId)}.png`);
+}
+
 function toPublicUploadPath(absPath) {
   const uploadsRoot = path.join(__dirname, '..', '..', 'uploads');
   const rel = path.relative(uploadsRoot, absPath).replace(/\\/g, '/');
   return `/uploads/${rel}`;
+}
+
+const ACCEPTANCE_TERMS_VERSION = 'repair-intake-2026-11';
+
+function decodeClientSignature(value) {
+  if (!value) return null;
+  const text = String(value);
+  const match = text.match(/^data:image\/png;base64,([A-Za-z0-9+/=\s]+)$/);
+  if (!match) {
+    const error = new Error('Подпись должна быть изображением PNG');
+    error.statusCode = 400;
+    throw error;
+  }
+  const buffer = Buffer.from(match[1].replace(/\s/g, ''), 'base64');
+  if (buffer.length < 100 || buffer.length > 500 * 1024) {
+    const error = new Error('Некорректный размер подписи');
+    error.statusCode = 400;
+    throw error;
+  }
+  // PNG magic bytes
+  if (buffer.subarray(0, 8).toString('hex') !== '89504e470d0a1a0a') {
+    const error = new Error('Некорректный файл подписи');
+    error.statusCode = 400;
+    throw error;
+  }
+  return buffer;
 }
 
 const upload = multer({
@@ -1031,7 +1061,8 @@ router.post('/', (req, res) => {
       warranty = false,
       onSite = false,
       paymentMethod = 'cash',
-      documentNumber = ''
+      documentNumber = '',
+      clientSignatureData = ''
     } = req.body;
     
     if (!client || !phone) {
@@ -1047,7 +1078,9 @@ router.post('/', (req, res) => {
       problemsList.push({ problemName: 'Приём в ремонт', price: Number(price) || 0, costPrice: Number(costPrice) || 0 });
     }
     
+    const signatureBuffer = decodeClientSignature(clientSignatureData);
     const now = getCurrentTime();
+    const clientSignedAt = signatureBuffer ? now : null;
     const docNum = allocateDocumentNumber(req.user.companyId, 'repair_receipt', documentNumber);
     
     // Вычисляем общую сумму из всех поломок
@@ -1108,6 +1141,58 @@ router.post('/', (req, res) => {
       );
       
       const orderId = orderResult.lastInsertRowid;
+
+      if (signatureBuffer) {
+        const signaturePath = privateSignaturePath(orderId);
+        ensureDir(path.dirname(signaturePath));
+        fs.writeFileSync(signaturePath, signatureBuffer);
+        const clientSignatureUrl = `/api/public/track/${publicToken}/signature`;
+        const acceptanceSnapshot = {
+          id: Number(orderId),
+          documentNumber: docNum,
+          publicToken,
+          client: String(client || ''),
+          phone: String(phone || ''),
+          email: String(email || ''),
+          clientAddress: String(clientAddress || ''),
+          brand: String(brand || ''),
+          model: String(model || ''),
+          color: String(color || ''),
+          deviceType: String(deviceType || ''),
+          imei: String(imei || ''),
+          serialNumber: String(serialNumber || ''),
+          equipment: String(equipment || ''),
+          problem: firstProblem,
+          description: String(description || ''),
+          receiverNotes: String(receiverNotes || ''),
+          dueAt: dueAt ? String(dueAt) : null,
+          estimatedPrice: Number(estimatedPrice) || 0,
+          prepayment: Number(prepayment) || 0,
+          inspection: inspection || {},
+          wishes: wishes || {},
+          problems: problemsList.map((p) => ({
+            problemName: String(p.problemName || ''),
+            problemDescription: String(p.problemDescription || ''),
+          })),
+          clientSignatureUrl,
+          clientSignedAt,
+          acceptanceTermsVersion: ACCEPTANCE_TERMS_VERSION,
+          createdAt: now,
+        };
+        db.prepare(`
+          UPDATE orders
+          SET clientSignatureUrl = ?, clientSignedAt = ?, acceptanceTermsVersion = ?,
+              acceptanceSnapshot = ?
+          WHERE id = ? AND companyId = ?
+        `).run(
+          clientSignatureUrl,
+          clientSignedAt,
+          ACCEPTANCE_TERMS_VERSION,
+          JSON.stringify(acceptanceSnapshot),
+          orderId,
+          req.user.companyId
+        );
+      }
       
       // Добавляем поломки
       const insertProblem = db.prepare(`
@@ -1174,10 +1259,13 @@ router.post('/', (req, res) => {
       console.error('intake sms schedule', e);
     }
     
-    res.status(201).json(formattedOrder);
+    res.status(201).json({
+      ...formattedOrder,
+      acceptanceSnapshot: safeParseJson(formattedOrder.acceptanceSnapshot, {}),
+    });
   } catch (error) {
     console.error('Ошибка создания заказа:', error);
-    res.status(500).json({ error: 'Ошибка создания заказа' });
+    res.status(error.statusCode || 500).json({ error: error.statusCode ? error.message : 'Ошибка создания заказа' });
   }
 });
 

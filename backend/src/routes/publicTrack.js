@@ -1,5 +1,7 @@
 const express = require('express')
 const crypto = require('crypto')
+const path = require('path')
+const fs = require('fs')
 const { db } = require('../config/database')
 
 const router = express.Router()
@@ -57,6 +59,27 @@ function maskPhone(phone) {
   return `***-**-${tail}`
 }
 
+/** Подпись доступна только по длинному секретному токену заявки. */
+router.get('/track/:token/signature', (req, res) => {
+  try {
+    const token = String(req.params.token || '').trim()
+    if (!token || token.length < 8) return res.status(400).json({ error: 'Некорректный код' })
+    const order = db
+      .prepare('SELECT id, clientSignatureUrl FROM orders WHERE publicToken = ?')
+      .get(token)
+    if (!order?.clientSignatureUrl) return res.status(404).json({ error: 'Подпись не найдена' })
+    const filePath = path.join(__dirname, '..', '..', 'data', 'signatures', `order-${Number(order.id)}.png`)
+    if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'Подпись не найдена' })
+    res.set('Cache-Control', 'private, no-store')
+    res.set('X-Content-Type-Options', 'nosniff')
+    res.type('png')
+    res.sendFile(filePath)
+  } catch (e) {
+    console.error('public signature error', e)
+    res.status(500).json({ error: 'Ошибка загрузки подписи' })
+  }
+})
+
 /** GET /api/public/track/:token */
 router.get('/track/:token', (req, res) => {
   try {
@@ -110,6 +133,21 @@ router.get('/track/:token', (req, res) => {
       }
     }
 
+    const acceptanceSnapshot = safeParseJson(order.acceptanceSnapshot, {})
+    const hasSignedAcceptance = Boolean(order.clientSignatureUrl && order.clientSignedAt)
+    const acceptanceDocument = hasSignedAcceptance
+      ? {
+          ...acceptanceSnapshot,
+          id: order.id,
+          documentNumber: order.documentNumber || String(order.id),
+          publicToken: order.publicToken,
+          clientSignatureUrl: order.clientSignatureUrl,
+          clientSignedAt: order.clientSignedAt,
+          acceptanceTermsVersion: order.acceptanceTermsVersion || '',
+        }
+      : null
+
+    res.set('Cache-Control', 'private, no-store')
     res.json({
       order: {
         id: order.id,
@@ -131,6 +169,7 @@ router.get('/track/:token', (req, res) => {
           description: p.problemDescription,
         })),
       },
+      acceptanceDocument,
       service: {
         name: company?.name || settings.name || 'FixNet',
         address: company?.address || settings.address || 'г. Ставрополь, ул. Мимоз, д. 26/1',
