@@ -25,6 +25,7 @@ import Invite from './pages/Invite'
 import { useAuth } from './auth'
 import { apiFetch } from './api'
 import GlobalSearch from './components/GlobalSearch'
+import ThemeToggle from './components/ThemeToggle'
 
 const menu = [
   { to: '/', label: 'Тренды' },
@@ -93,7 +94,9 @@ export default function App(){
             </NavLink>
           ))}
         </nav>
-        <div className='p-3 text-xs text-muted border-t border-border'>тёмная тема</div>
+        <div className='p-2 border-t border-border'>
+          <ThemeToggle />
+        </div>
       </aside>
       )}
 
@@ -131,7 +134,9 @@ export default function App(){
               </NavLink>
             ))}
           </nav>
-          <div className='p-3 text-xs text-muted border-t border-border'>тёмная тема</div>
+          <div className='p-2 border-t border-border'>
+            <ThemeToggle />
+          </div>
         </aside>
       )}
 
@@ -270,6 +275,7 @@ function Topbar({ refreshKey, onMenuClick }: { refreshKey: string; onMenuClick: 
       {/* Right side actions */}
       <div className='flex items-center gap-1 shrink-0'>
         <GlobalSearch />
+        <ThemeToggle variant='compact' />
         <button type='button' className='btn secondary hidden md:inline-flex text-sm px-3 py-2' onClick={() => navigate('/help')}>
           Справка
         </button>

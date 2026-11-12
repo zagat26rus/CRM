@@ -132,22 +132,43 @@ body {
 .modal-overlay { 
   @apply fixed inset-0 bg-black/60 backdrop-blur-sm flex items-start sm:items-center justify-center p-4 z-50;
   /* Даем возможность скроллить модалку, если она выше экрана */
-  @apply overflow-y-auto;
+  width: 100%;
+  max-width: 100vw;
+  overflow-x: hidden;
+  overflow-y: auto;
   -webkit-overflow-scrolling: touch;
-  overscroll-behavior: contain;
+  overscroll-behavior: none;
+  overscroll-behavior-x: none;
+  touch-action: pan-y;
 }
 .modal { 
   @apply card w-full max-w-5xl;
   /* На мобильных модальное окно занимает почти весь экран */
-  @apply max-h-[90vh] overflow-y-auto;
+  @apply max-h-[90vh];
   @apply sm:max-h-[85vh];
+  width: min(100%, calc(100dvw - 1rem));
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  overscroll-behavior-x: none;
+  touch-action: pan-y;
 }
 .modal-panel {
   @apply card w-full;
-  @apply max-h-[90vh] overflow-y-auto;
+  @apply max-h-[90vh];
   @apply sm:max-h-[85vh];
+  width: min(100%, calc(100dvw - 1rem));
+  overflow-x: hidden;
+  overflow-y: auto;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
+  overscroll-behavior-x: none;
+  touch-action: pan-y;
+}
+html.modal-open,
+body.modal-open {
+  overflow: hidden !important;
+  overscroll-behavior: none;
 }
 .modal-title { @apply text-lg sm:text-xl font-semibold; }
 .grid-2 { @apply grid grid-cols-1 sm:grid-cols-2 gap-4; }

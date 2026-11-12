@@ -1,4 +1,5 @@
 import { ReactNode, useRef } from 'react'
+import { useLockBodyScroll } from '../hooks/useLockBodyScroll'
 
 export default function Modal({
   title,
@@ -12,6 +13,7 @@ export default function Modal({
   // Close only if press started AND ended on the backdrop.
   // Prevents closing when selecting text inside and releasing outside the dialog.
   const overlayPressed = useRef(false)
+  useLockBodyScroll(true)
 
   return (
     <div

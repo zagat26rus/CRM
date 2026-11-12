@@ -1,4 +1,5 @@
 import { useMemo, useState, useEffect } from 'react'
+import { useLockBodyScroll } from '../hooks/useLockBodyScroll'
 import { useSearchParams } from 'react-router-dom'
 import { apiFetch, isImageAttachment, staticUrl } from '../api'
 import { printRepairReceipt, renderRepairReceiptHtml } from '../repairReceiptTemplate'
@@ -1219,6 +1220,7 @@ function EditOrderModal({
   }
 
   const { statuses: dynamicStatuses, settings } = useOrderStatuses()
+  useLockBodyScroll(true)
 
   const [form, setForm] = useState<Order>({
     ...order,
@@ -1645,6 +1647,7 @@ function CloseOrderModal({
   const [paymentMethod, setPaymentMethod] = useState<string>('cash');
   const [comment, setComment] = useState<string>(`Оплата заказа #${order.id}`);
   const [loading, setLoading] = useState(false);
+  useLockBodyScroll(true)
 
   const paymentMethods = [
     { id: 'cash', name: 'Наличные', icon: '' },
@@ -1864,6 +1867,7 @@ function OrderModal({
   });
   const [printAfterSave, setPrintAfterSave] = useState(true)
   const catalog = useDeviceCatalog()
+  useLockBodyScroll(true)
 
   const crmIssueNames = useMemo(
     () => problems.filter((p) => !form.deviceType || p.deviceType === form.deviceType).map((p) => p.name),
