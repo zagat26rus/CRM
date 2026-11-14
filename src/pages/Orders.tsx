@@ -2509,7 +2509,7 @@ function OrderModal({
               onClick={() => void handleSubmit()}
               disabled={saving}
             >
-              {saving ? 'Создание…' : 'Без подписи'}
+              {saving ? 'Создание…' : printAfterSave ? 'Создать и распечатать' : 'Создать заявку'}
             </button>
             <button
               className='btn order-1 sm:order-3 flex-1 sm:flex-initial'
@@ -2518,7 +2518,7 @@ function OrderModal({
               }}
               disabled={saving}
             >
-              Подписать
+              Подписать на экране
             </button>
           </div>
         </div>
