@@ -69,6 +69,7 @@ const aiRoutes = require('./routes/ai');
 const digestRoutes = require('./routes/digest');
 const cashRegistersRoutes = require('./routes/cashRegisters');
 const tradeinRoutes = require('./routes/tradein');
+const telegram = require('./telegram');
 
 // Подключаем маршруты
 app.use('/api/public', publicTrackRoutes);
@@ -100,6 +101,7 @@ app.use('/api/search', searchRoutes);
 app.use('/api/warranties', warrantiesRoutes);
 app.use('/api/ai', aiRoutes);
 app.use('/api/digest', digestRoutes);
+app.use('/api/telegram', telegram.router);
 
 // Базовые маршруты
 app.get('/health', (req, res) => {
@@ -168,6 +170,7 @@ function scheduleUploadCleanup() {
 // Запуск сервера
 app.listen(PORT, () => {
   console.log(`Сервер запущен на порту ${PORT}`);
+  telegram.start();
   if (serveFrontend) {
     console.log(`CRM интерфейс: http://localhost:${PORT}`);
   }
