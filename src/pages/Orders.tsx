@@ -32,7 +32,9 @@ import {
   customFieldValuesToRecord,
   defaultOrderFormSchema,
   findMissingOrderFormField,
+  getOrderFormValidationErrors,
   type OrderCustomFieldValue,
+  type StandardOrderFieldKey,
 } from '../utils/orderFormSchema'
 
 type Order = {
@@ -1967,6 +1969,7 @@ function OrderModal({
   const [saving, setSaving] = useState(false)
   const [createdOrder, setCreatedOrder] = useState<Order | null>(null)
   const [customValues, setCustomValues] = useState<Record<string, any>>({})
+  const [validationErrors, setValidationErrors] = useState<Set<string>>(new Set())
   const catalog = useDeviceCatalog()
   useLockBodyScroll(true)
 
@@ -2077,9 +2080,12 @@ function OrderModal({
   }
 
   const validateRequired = () => {
-    const missing = findMissingOrderFormField(orderFormSchema, form, customValues)
-    if (missing) {
-      alert(`Заполните обязательное поле: ${missing}`)
+    const errors = getOrderFormValidationErrors(orderFormSchema, form, customValues)
+    setValidationErrors(new Set([
+      ...errors.standard.map((key) => `standard:${key}`),
+      ...errors.custom.map((id) => `custom:${id}`),
+    ]))
+    if (errors.labels.length) {
       return false
     }
     return true
@@ -2177,9 +2183,33 @@ function OrderModal({
 
   const { statuses: createStatuses, settings: createSettings } = useOrderStatuses()
   const statuses = createStatuses.length ? createStatuses : [...ORDER_STATUSES];
-  const orderFormSchema = createSettings?.orderFormSchema || defaultOrderFormSchema()
+  const orderFormSchema = useMemo(
+    () => createSettings?.orderFormSchema || defaultOrderFormSchema(),
+    [createSettings],
+  )
   const showField = (key: keyof typeof orderFormSchema.standard) => orderFormSchema.standard[key]?.visible !== false
   const requiredField = (key: keyof typeof orderFormSchema.standard) => Boolean(orderFormSchema.standard[key]?.required)
+  const fieldErrorClass = (key: StandardOrderFieldKey) =>
+    validationErrors.has(`standard:${key}`) ? 'ring-2 ring-danger border-danger rounded-xl' : ''
+  const customErrorIds = useMemo(
+    () => new Set(
+      Array.from(validationErrors)
+        .filter((id) => id.startsWith('custom:'))
+        .map((id) => id.slice('custom:'.length)),
+    ),
+    [validationErrors],
+  )
+
+  useEffect(() => {
+    if (validationErrors.size === 0) return
+    const errors = getOrderFormValidationErrors(orderFormSchema, form, customValues)
+    setValidationErrors(new Set([
+      ...errors.standard.map((key) => `standard:${key}`),
+      ...errors.custom.map((id) => `custom:${id}`),
+    ]))
+    // Revalidate only after the user changes a field or the schema loads.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form, customValues, orderFormSchema])
 
   useEffect(() => {
     if (!statuses.length) return
@@ -2253,6 +2283,12 @@ function OrderModal({
             <button onClick={onClose} className='btn secondary'>Закрыть</button>
           </div>
 
+          {validationErrors.size > 0 && (
+            <div className='mb-4 rounded-xl border border-danger bg-danger/10 text-danger px-4 py-3 text-sm font-medium'>
+              Заполните обязательные поля, выделенные красным.
+            </div>
+          )}
+
           <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
             {/* Поля клиента с выбором из существующих */}
             <div className="md:col-span-2">
@@ -2298,7 +2334,7 @@ function OrderModal({
               )}
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
+                <div className={fieldErrorClass('client')}>
                   <label className="label">ФИО</label>
                   <ClientSuggestInput
                     mode="name"
@@ -2312,7 +2348,7 @@ function OrderModal({
                     onSelect={applyClient}
                   />
                 </div>
-                <div>
+                <div className={fieldErrorClass('phone')}>
                   <label className="label">Телефон</label>
                   <ClientSuggestInput
                     mode="phone"
@@ -2330,7 +2366,7 @@ function OrderModal({
               </div>
             </div>
 
-            {showField('email') && <div className="md:col-span-2">
+            {showField('email') && <div className={`md:col-span-2 ${fieldErrorClass('email')}`}>
               <label className="label">Email{requiredField('email') ? ' *' : ''}</label>
               <input
                 type="email"
@@ -2343,7 +2379,7 @@ function OrderModal({
             
             {showField('status') && <div><label className='label'>Статус</label><Select className='select' value={form.status} onChange={(e) => setForm({...form, status: e.target.value})}>{statuses.map(status => <option key={status} value={status}>{status}</option>)}</Select></div>}
 
-            <div className='md:col-span-2 p-4 bg-surface rounded-xl border border-border'>
+            <div className={`md:col-span-2 p-4 bg-surface rounded-xl border border-border ${fieldErrorClass('device')}`}>
               <h3 className='font-semibold text-sm mb-3'>Устройство и неисправность</h3>
               <DeviceCatalogFields
                 catalog={catalog}
@@ -2363,32 +2399,32 @@ function OrderModal({
               />
             </div>
 
-            {showField('color') && <div>
+            {showField('color') && <div className={fieldErrorClass('color')}>
               <label className='label'>Цвет{requiredField('color') ? ' *' : ''}</label>
               <input className='input' value={(form as any).color || ''} onChange={(e) => setForm(prev => ({...prev, color: e.target.value}))} placeholder='Например: черный' />
             </div>}
 
-            {showField('imei') && <div>
+            {showField('imei') && <div className={fieldErrorClass('imei')}>
               <label className='label'>IMEI{requiredField('imei') ? ' *' : ''}</label>
               <input className='input' value={(form as any).imei || ''} onChange={(e) => setForm(prev => ({...prev, imei: e.target.value}))} placeholder='IMEI' />
             </div>}
 
-            {showField('serialNumber') && <div>
+            {showField('serialNumber') && <div className={fieldErrorClass('serialNumber')}>
               <label className='label'>S/N{requiredField('serialNumber') ? ' *' : ''}</label>
               <input className='input' value={(form as any).serialNumber || ''} onChange={(e) => setForm(prev => ({...prev, serialNumber: e.target.value}))} placeholder='Серийный номер' />
             </div>}
 
-            {showField('equipment') && <div className='md:col-span-2'>
+            {showField('equipment') && <div className={`md:col-span-2 ${fieldErrorClass('equipment')}`}>
               <label className='label'>Комплектация{requiredField('equipment') ? ' *' : ''}</label>
               <input className='input' value={(form as any).equipment || ''} onChange={(e) => setForm(prev => ({...prev, equipment: e.target.value}))} placeholder='Например: кабель, чехол, коробка' />
             </div>}
 
-            {showField('devicePassword') && <div>
+            {showField('devicePassword') && <div className={fieldErrorClass('devicePassword')}>
               <label className='label'>Пароль{requiredField('devicePassword') ? ' *' : ''}</label>
               <input className='input' value={(form as any).devicePassword || ''} onChange={(e) => setForm(prev => ({...prev, devicePassword: e.target.value}))} placeholder='Пароль/код' />
             </div>}
 
-            {showField('clientAddress') && <div className='md:col-span-2'>
+            {showField('clientAddress') && <div className={`md:col-span-2 ${fieldErrorClass('clientAddress')}`}>
               <label className='label'>Адрес клиента{requiredField('clientAddress') ? ' *' : ''}</label>
               <input className='input' value={(form as any).clientAddress || ''} onChange={(e) => setForm(prev => ({...prev, clientAddress: e.target.value}))} placeholder='Адрес клиента' />
             </div>}
@@ -2411,17 +2447,17 @@ function OrderModal({
               onOnSiteChange={(checked) => setForm((prev) => ({ ...prev, onSite: checked }))}
             />}
 
-            {showField('managerName') && <div>
+            {showField('managerName') && <div className={fieldErrorClass('managerName')}>
               <label className='label'>Менеджер{requiredField('managerName') ? ' *' : ''}</label>
               <input className='input' value={(form as any).managerName || ''} onChange={(e) => setForm(prev => ({...prev, managerName: e.target.value}))} placeholder='Менеджер' />
             </div>}
 
-            {showField('executorName') && <div>
+            {showField('executorName') && <div className={fieldErrorClass('executorName')}>
               <label className='label'>Исполнитель{requiredField('executorName') ? ' *' : ''}</label>
               <input className='input' value={(form as any).executorName || ''} onChange={(e) => setForm(prev => ({...prev, executorName: e.target.value}))} placeholder='Исполнитель' />
             </div>}
 
-            {showField('dueAt') && <div>
+            {showField('dueAt') && <div className={fieldErrorClass('dueAt')}>
               <label className='label'>Срок{requiredField('dueAt') ? ' *' : ''}</label>
               <input type='datetime-local' className='input' value={(form as any).dueAt ? String((form as any).dueAt).slice(0, 16) : ''} onChange={(e) => setForm(prev => ({...prev, dueAt: e.target.value}))} />
             </div>}
@@ -2433,7 +2469,7 @@ function OrderModal({
               </label>
             </div>}
 
-            {showField('receiverNotes') && <div className='md:col-span-2'>
+            {showField('receiverNotes') && <div className={`md:col-span-2 ${fieldErrorClass('receiverNotes')}`}>
               <label className='label'>Заметки приемщика{requiredField('receiverNotes') ? ' *' : ''}</label>
               <textarea
                 className='textarea'
@@ -2444,7 +2480,7 @@ function OrderModal({
               />
             </div>}
 
-            {showField('description') && <div className='md:col-span-2'>
+            {showField('description') && <div className={`md:col-span-2 ${fieldErrorClass('description')}`}>
               <label className='label'>Дополнительное описание{requiredField('description') ? ' *' : ''}</label>
               <textarea className='textarea' value={form.description} onChange={(e) => setForm({...form, description: e.target.value})} placeholder='Дополнительные заметки...' rows={3}/>
             </div>}
@@ -2453,6 +2489,7 @@ function OrderModal({
               fields={orderFormSchema.custom}
               values={customValues}
               onChange={(id, value) => setCustomValues((prev) => ({ ...prev, [id]: value }))}
+              errorIds={customErrorIds}
             />
           </div>
 
@@ -2470,7 +2507,7 @@ function OrderModal({
             <button
               className='btn secondary order-2'
               onClick={() => void handleSubmit()}
-              disabled={saving || !form.client || !form.phone || !form.problem.trim()}
+              disabled={saving}
             >
               {saving ? 'Создание…' : 'Без подписи'}
             </button>
@@ -2479,7 +2516,7 @@ function OrderModal({
               onClick={() => {
                 if (validateRequired()) setSignatureOpen(true)
               }}
-              disabled={saving || !form.client || !form.phone || !form.problem.trim()}
+              disabled={saving}
             >
               Подписать
             </button>

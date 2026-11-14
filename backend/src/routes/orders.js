@@ -1387,7 +1387,6 @@ router.put('/:id', (req, res) => {
       }
     } else {
       // Полное обновление
-      validateConfiguredStandardFields(req.user.companyId, { ...existingOrder, ...updates });
       const allowedFields = [
         'client',
         'phone',

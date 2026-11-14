@@ -6,9 +6,10 @@ type Props = {
   values: Record<string, any>
   onChange: (id: string, value: any) => void
   disabled?: boolean
+  errorIds?: Set<string>
 }
 
-export default function CustomOrderFields({ fields, values, onChange, disabled = false }: Props) {
+export default function CustomOrderFields({ fields, values, onChange, disabled = false, errorIds }: Props) {
   const visible = fields.filter((field) => field.visible)
   if (!visible.length) return null
 
@@ -19,10 +20,13 @@ export default function CustomOrderFields({ fields, values, onChange, disabled =
         {visible.map((field) => {
           const label = `${field.label}${field.required ? ' *' : ''}`
           const value = values[field.id]
+          const invalidClass = errorIds?.has(field.id)
+            ? 'ring-2 ring-danger border-danger rounded-xl p-2'
+            : ''
 
           if (field.type === 'textarea') {
             return (
-              <div key={field.id} className='md:col-span-2'>
+              <div key={field.id} className={`md:col-span-2 ${invalidClass}`}>
                 <label className='label'>{label}</label>
                 <textarea
                   className='textarea'
@@ -38,7 +42,7 @@ export default function CustomOrderFields({ fields, values, onChange, disabled =
 
           if (field.type === 'select') {
             return (
-              <div key={field.id}>
+              <div key={field.id} className={invalidClass}>
                 <label className='label'>{label}</label>
                 <Select
                   className='select'
@@ -57,7 +61,7 @@ export default function CustomOrderFields({ fields, values, onChange, disabled =
 
           if (field.type === 'radio') {
             return (
-              <fieldset key={field.id} className='md:col-span-2'>
+              <fieldset key={field.id} className={`md:col-span-2 ${invalidClass}`}>
                 <legend className='label'>{label}</legend>
                 <div className='flex flex-wrap gap-3'>
                   {field.options.map((option) => (
@@ -79,7 +83,7 @@ export default function CustomOrderFields({ fields, values, onChange, disabled =
 
           if (field.type === 'checkbox') {
             return (
-              <label key={field.id} className='flex items-center gap-2 cursor-pointer self-end min-h-11'>
+              <label key={field.id} className={`flex items-center gap-2 cursor-pointer self-end min-h-11 ${invalidClass}`}>
                 <input
                   type='checkbox'
                   checked={Boolean(value)}
@@ -94,7 +98,7 @@ export default function CustomOrderFields({ fields, values, onChange, disabled =
           if (field.type === 'multiselect') {
             const selected = Array.isArray(value) ? value : []
             return (
-              <fieldset key={field.id} className='md:col-span-2'>
+              <fieldset key={field.id} className={`md:col-span-2 ${invalidClass}`}>
                 <legend className='label'>{label}</legend>
                 <div className='flex flex-wrap gap-3'>
                   {field.options.map((option) => (
@@ -119,7 +123,7 @@ export default function CustomOrderFields({ fields, values, onChange, disabled =
           }
 
           return (
-            <div key={field.id}>
+            <div key={field.id} className={invalidClass}>
               <label className='label'>{label}</label>
               <input
                 className='input'

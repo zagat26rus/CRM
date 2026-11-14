@@ -152,6 +152,14 @@ export function findMissingOrderFormField(
   values: Record<string, any>,
   customValues: Record<string, any>,
 ) {
+  return getOrderFormValidationErrors(schema, values, customValues).labels[0] || ''
+}
+
+export function getOrderFormValidationErrors(
+  schema: OrderFormSchema,
+  values: Record<string, any>,
+  customValues: Record<string, any>,
+) {
   const standardValue: Partial<Record<StandardOrderFieldKey, any>> = {
     client: values.client,
     phone: values.phone,
@@ -170,15 +178,22 @@ export function findMissingOrderFormField(
     receiverNotes: values.receiverNotes,
     description: values.description,
   }
+  const standard: StandardOrderFieldKey[] = []
+  const custom: string[] = []
+  const labels: string[] = []
   for (const field of STANDARD_ORDER_FIELDS) {
     const config = schema.standard[field.key]
     if (config.visible && config.required && !hasValue(standardValue[field.key])) {
-      return field.label
+      standard.push(field.key)
+      labels.push(field.label)
     }
   }
   for (const field of schema.custom) {
-    if (field.visible && field.required && !hasValue(customValues[field.id])) return field.label
+    if (field.visible && field.required && !hasValue(customValues[field.id])) {
+      custom.push(field.id)
+      labels.push(field.label)
+    }
   }
-  return ''
+  return { standard, custom, labels }
 }
 
