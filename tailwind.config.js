@@ -1,4 +1,9 @@
 /** @type {import('tailwindcss').Config} */
+
+function rgbChannel(name) {
+  return `rgb(var(${name}) / <alpha-value>)`
+}
+
 export default {
   content: [
     "./index.html",
@@ -7,27 +12,28 @@ export default {
   theme: {
     extend: {
       colors: {
-        bg: "#0e0f10",
-        surface: "#141518",
-        border: "#1f2024",
-        text: "#e7e7ea",
-        muted: "#a1a1aa",
+        bg: rgbChannel('--color-bg'),
+        surface: rgbChannel('--color-surface'),
+        border: rgbChannel('--color-border'),
+        text: rgbChannel('--color-text'),
+        foreground: rgbChannel('--color-text'),
+        muted: rgbChannel('--color-muted'),
         primary: {
-          DEFAULT: "#f5c400",
-          600: "#e5b700",
-          700: "#c89f00",
-          800: "#9e7e00"
+          DEFAULT: rgbChannel('--color-primary'),
+          600: rgbChannel('--color-primary-600'),
+          700: rgbChannel('--color-primary-700'),
+          800: rgbChannel('--color-primary-800'),
         },
-        success: "#23c55e",
-        danger: "#ef4444",
-        warning: "#f59e0b",
+        success: rgbChannel('--color-success'),
+        danger: rgbChannel('--color-danger'),
+        warning: rgbChannel('--color-warning'),
       },
       boxShadow: {
-        soft: "0 8px 24px rgba(0,0,0,.35)"
+        soft: "var(--shadow-soft)",
       },
       borderRadius: {
-        xl2: "1rem"
-      }
+        xl2: "1rem",
+      },
     },
   },
   plugins: [],

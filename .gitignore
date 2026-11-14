@@ -17,3 +17,4 @@ coverage/
 # ОС
 .DS_Store
 Thumbs.db
+tsconfig.tsbuildinfo

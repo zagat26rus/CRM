@@ -1,0 +1,25 @@
+--- a/src/routes/orders.js
++++ b/src/routes/orders.js
+@@
+       brand,
+       model,
+       deviceType = 'Смартфон',
+       color = '',
++      deviceStorage = '',
+       imei = '',
+@@
+-          companyId, client, phone, email, clientAddress, problem, brand, model, color, deviceType,
++          companyId, client, phone, email, clientAddress, problem, brand, model, color, deviceStorage, deviceType,
+@@
+-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
++        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+@@
+         brand || '',
+         model || '',
+         String(color || ''),
++        String(deviceStorage || ''),
+         deviceType,
+@@
+         'color',
++        'deviceStorage',
+         'deviceType',
