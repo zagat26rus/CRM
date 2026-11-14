@@ -9,6 +9,15 @@ import InvoiceTemplatesModal from './InvoiceTemplatesModal'
 import TelegramBotModal from './TelegramBotModal'
 import { invalidateCompanySettingsCache } from '../hooks/useCompanySettings'
 import { ORDER_STATUSES as DEFAULT_STATUSES } from '../utils/orderStatuses'
+import {
+  CUSTOM_FIELD_TYPE_LABELS,
+  STANDARD_ORDER_FIELDS,
+  defaultOrderFormSchema,
+  normalizeOrderFormSchema,
+  type OrderCustomField,
+  type OrderCustomFieldType,
+  type OrderFormSchema,
+} from '../utils/orderFormSchema'
 
 type UserRow = {
   id: number
@@ -34,11 +43,11 @@ type InviteRow = {
 export default function Settings() {
   const auth = useAuth()
   const toast = useToast()
-  const [panel, setPanel] = useState<null | 'company' | 'profile' | 'staff' | 'integrations' | 'telegram' | 'invoices' | 'orders' | 'cash'>(null)
+  const [panel, setPanel] = useState<null | 'company' | 'profile' | 'staff' | 'integrations' | 'telegram' | 'invoices' | 'orders' | 'order-form' | 'cash'>(null)
 
   const sections = [
     { title: 'Компания', items: ['Общее', 'Сотрудники', 'Ваш профиль'] },
-    { title: 'Заказы', items: ['Статусы'] },
+    { title: 'Заказы', items: ['Статусы', 'Редактор заявки'] },
     { title: 'Платежи', items: ['Кассы', 'Методы оплаты'] },
     { title: 'Документы', items: ['Шаблоны квитанций'] },
     { title: 'Интеграции', items: ['Telegram-бот', 'API и Webhook'] }
@@ -52,6 +61,7 @@ export default function Settings() {
     if (item === 'API и Webhook') return setPanel('integrations')
     if (item === 'Шаблоны квитанций') return setPanel('invoices')
     if (item === 'Статусы') return setPanel('orders')
+    if (item === 'Редактор заявки') return setPanel('order-form')
     if (item === 'Кассы') return setPanel('cash')
     if (item === 'Методы оплаты') return toast.push('Методы: карта, наличные, перевод, онлайн. Кассу выбираете при каждом платеже.')
   }
@@ -91,6 +101,7 @@ export default function Settings() {
       {panel === 'telegram' && <TelegramBotModal onClose={() => setPanel(null)} />}
       {panel === 'invoices' && <InvoiceTemplatesModal onClose={() => setPanel(null)} />}
       {panel === 'orders' && <OrderSettingsModal onClose={() => setPanel(null)} />}
+      {panel === 'order-form' && <OrderFormEditorModal onClose={() => setPanel(null)} />}
       {panel === 'cash' && <CashRegistersModal onClose={() => setPanel(null)} />}
     </div>
   )
@@ -461,6 +472,295 @@ function OrderSettingsModal({ onClose }: { onClose: () => void }) {
             <button type='button' className='btn' onClick={save} disabled={saving}>
               {saving ? 'Сохранение…' : 'Сохранить'}
             </button>
+          )}
+        </div>
+      )}
+    </Modal>
+  )
+}
+
+function OrderFormEditorModal({ onClose }: { onClose: () => void }) {
+  const auth = useAuth()
+  const toast = useToast()
+  const canEdit = ['owner', 'admin'].includes(auth.user?.role || '')
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [schema, setSchema] = useState<OrderFormSchema>(defaultOrderFormSchema())
+
+  useEffect(() => {
+    ;(async () => {
+      try {
+        const res = await apiFetch('/company/settings')
+        const data = await res.json().catch(() => ({}))
+        if (!res.ok) throw new Error(data?.error || 'Ошибка загрузки')
+        setSchema(normalizeOrderFormSchema(data.orderFormSchema))
+      } catch (e: any) {
+        toast.push(e?.message || 'Не удалось загрузить редактор заявки')
+      } finally {
+        setLoading(false)
+      }
+    })()
+  }, [])
+
+  const updateStandard = (
+    key: keyof OrderFormSchema['standard'],
+    patch: Partial<{ visible: boolean; required: boolean }>,
+  ) => {
+    setSchema((prev) => ({
+      ...prev,
+      standard: {
+        ...prev.standard,
+        [key]: { ...prev.standard[key], ...patch },
+      },
+    }))
+  }
+
+  const updateCustom = (id: string, patch: Partial<OrderCustomField>) => {
+    setSchema((prev) => ({
+      ...prev,
+      custom: prev.custom.map((field) => field.id === id ? { ...field, ...patch } : field),
+    }))
+  }
+
+  const addCustom = () => {
+    const id = `field_${Date.now().toString(36)}`
+    setSchema((prev) => ({
+      ...prev,
+      custom: [
+        ...prev.custom,
+        {
+          id,
+          label: 'Новое поле',
+          type: 'text',
+          visible: true,
+          required: false,
+          options: [],
+          placeholder: '',
+        },
+      ],
+    }))
+  }
+
+  const moveCustom = (index: number, direction: -1 | 1) => {
+    setSchema((prev) => {
+      const next = [...prev.custom]
+      const target = index + direction
+      if (target < 0 || target >= next.length) return prev
+      ;[next[index], next[target]] = [next[target], next[index]]
+      return { ...prev, custom: next }
+    })
+  }
+
+  async function save() {
+    if (!canEdit) return
+    const normalized = normalizeOrderFormSchema(schema)
+    const bad = normalized.custom.find(
+      (field) =>
+        ['select', 'radio', 'multiselect'].includes(field.type) &&
+        field.options.length === 0,
+    )
+    if (bad) return toast.push(`Добавьте варианты для поля «${bad.label}»`)
+    setSaving(true)
+    try {
+      const res = await apiFetch('/company/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderFormSchema: normalized }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data?.error || 'Ошибка сохранения')
+      invalidateCompanySettingsCache()
+      toast.push('Форма заявки сохранена')
+      onClose()
+    } catch (e: any) {
+      toast.push(e?.message || 'Не удалось сохранить форму')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <Modal title='Редактор заявки' onClose={onClose}>
+      {loading ? (
+        <div className='py-10 text-center text-muted'>Загрузка…</div>
+      ) : (
+        <div className='space-y-6 min-w-0'>
+          <div>
+            <div className='font-semibold'>Стандартные поля</div>
+            <p className='text-xs text-muted mt-1'>
+              ФИО, телефон и устройство защищены: без них заказ не сможет работать в CRM.
+            </p>
+          </div>
+
+          <div className='space-y-2'>
+            {STANDARD_ORDER_FIELDS.map((field) => {
+              const value = schema.standard[field.key]
+              return (
+                <div
+                  key={field.key}
+                  className='rounded-xl border border-border p-3 flex flex-col sm:flex-row sm:items-center gap-3'
+                >
+                  <div className='font-medium flex-1'>
+                    {field.label}
+                    {field.locked ? <span className='text-xs text-muted ml-2'>системное</span> : null}
+                  </div>
+                  <div className='flex flex-wrap gap-4'>
+                    <label className='flex items-center gap-2 text-sm'>
+                      <input
+                        type='checkbox'
+                        checked={value.visible}
+                        disabled={!canEdit || field.locked}
+                        onChange={(e) => updateStandard(field.key, {
+                          visible: e.target.checked,
+                          required: e.target.checked ? value.required : false,
+                        })}
+                      />
+                      Показывать
+                    </label>
+                    <label className='flex items-center gap-2 text-sm'>
+                      <input
+                        type='checkbox'
+                        checked={value.required}
+                        disabled={!canEdit || field.locked || field.allowRequired === false || !value.visible}
+                        onChange={(e) => updateStandard(field.key, { required: e.target.checked })}
+                      />
+                      Обязательное
+                    </label>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+
+          <div className='pt-4 border-t border-border flex items-center justify-between gap-3'>
+            <div>
+              <div className='font-semibold'>Свои поля</div>
+              <p className='text-xs text-muted mt-1'>Можно менять порядок, тип, обязательность и варианты.</p>
+            </div>
+            {canEdit && (
+              <button type='button' className='btn secondary text-sm' onClick={addCustom}>
+                Добавить поле
+              </button>
+            )}
+          </div>
+
+          {schema.custom.length === 0 ? (
+            <div className='rounded-xl border border-dashed border-border p-6 text-center text-sm text-muted'>
+              Пользовательских полей пока нет
+            </div>
+          ) : (
+            <div className='space-y-3'>
+              {schema.custom.map((field, index) => {
+                const hasOptions = ['select', 'radio', 'multiselect'].includes(field.type)
+                return (
+                  <div key={field.id} className='rounded-xl border border-border p-4 space-y-3'>
+                    <div className='flex items-center justify-between gap-2'>
+                      <div className='text-xs text-muted'>Поле {index + 1}</div>
+                      {canEdit && (
+                        <div className='flex gap-1'>
+                          <button type='button' className='btn ghost text-sm px-2' disabled={index === 0} onClick={() => moveCustom(index, -1)}>↑</button>
+                          <button type='button' className='btn ghost text-sm px-2' disabled={index === schema.custom.length - 1} onClick={() => moveCustom(index, 1)}>↓</button>
+                          <button
+                            type='button'
+                            className='btn ghost text-sm px-2 text-danger'
+                            onClick={() => setSchema((prev) => ({
+                              ...prev,
+                              custom: prev.custom.filter((row) => row.id !== field.id),
+                            }))}
+                          >
+                            Удалить
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                    <div className='grid grid-cols-1 sm:grid-cols-2 gap-3'>
+                      <div>
+                        <label className='label text-xs'>Название</label>
+                        <input
+                          className='input'
+                          value={field.label}
+                          disabled={!canEdit}
+                          onChange={(e) => updateCustom(field.id, { label: e.target.value })}
+                        />
+                      </div>
+                      <div>
+                        <label className='label text-xs'>Тип поля</label>
+                        <Select
+                          className='select'
+                          value={field.type}
+                          disabled={!canEdit}
+                          onChange={(e) => updateCustom(field.id, {
+                            type: e.target.value as OrderCustomFieldType,
+                            options: ['select', 'radio', 'multiselect'].includes(e.target.value)
+                              ? field.options
+                              : [],
+                          })}
+                        >
+                          {Object.entries(CUSTOM_FIELD_TYPE_LABELS).map(([value, label]) => (
+                            <option key={value} value={value}>{label}</option>
+                          ))}
+                        </Select>
+                      </div>
+                    </div>
+                    {!hasOptions && field.type !== 'checkbox' && (
+                      <div>
+                        <label className='label text-xs'>Подсказка внутри поля</label>
+                        <input
+                          className='input'
+                          value={field.placeholder}
+                          disabled={!canEdit}
+                          onChange={(e) => updateCustom(field.id, { placeholder: e.target.value })}
+                          placeholder='Например: укажите внешний вид устройства'
+                        />
+                      </div>
+                    )}
+                    {hasOptions && (
+                      <div>
+                        <label className='label text-xs'>Варианты — каждый с новой строки</label>
+                        <textarea
+                          className='textarea'
+                          rows={4}
+                          value={field.options.join('\n')}
+                          disabled={!canEdit}
+                          onChange={(e) => updateCustom(field.id, {
+                            options: e.target.value.split('\n').map((v) => v.trim()).filter(Boolean),
+                          })}
+                          placeholder={'Вариант 1\nВариант 2'}
+                        />
+                      </div>
+                    )}
+                    <div className='flex flex-wrap gap-4'>
+                      <label className='flex items-center gap-2 text-sm'>
+                        <input
+                          type='checkbox'
+                          checked={field.visible}
+                          disabled={!canEdit}
+                          onChange={(e) => updateCustom(field.id, { visible: e.target.checked })}
+                        />
+                        Показывать
+                      </label>
+                      <label className='flex items-center gap-2 text-sm'>
+                        <input
+                          type='checkbox'
+                          checked={field.required}
+                          disabled={!canEdit || !field.visible}
+                          onChange={(e) => updateCustom(field.id, { required: e.target.checked })}
+                        />
+                        Обязательное
+                      </label>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+
+          {canEdit && (
+            <div className='sticky bottom-0 bg-bg/95 backdrop-blur border-t border-border pt-3'>
+              <button type='button' className='btn w-full sm:w-auto' onClick={save} disabled={saving}>
+                {saving ? 'Сохранение…' : 'Сохранить форму заявки'}
+              </button>
+            </div>
           )}
         </div>
       )}

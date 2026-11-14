@@ -3,6 +3,7 @@ import { useLockBodyScroll } from '../hooks/useLockBodyScroll'
 import ClientSuggestInput from '../components/ClientSuggestInput'
 import CashRegisterSelect from '../components/CashRegisterSelect'
 import ClientSignaturePad from '../components/ClientSignaturePad'
+import CustomOrderFields from '../components/CustomOrderFields'
 import { useSearchParams } from 'react-router-dom'
 import { apiFetch, isImageAttachment, staticUrl } from '../api'
 import { PUBLIC_SITE_URL } from '../config'
@@ -27,6 +28,12 @@ import { useOrderStatuses } from '../hooks/useCompanySettings'
 import OrderPartsSection from '../components/OrderPartsSection'
 import OrderNotifyButtons from '../components/OrderNotifyButtons'
 import type { OrderPartLine } from '../utils/notifyClient'
+import {
+  customFieldValuesToRecord,
+  defaultOrderFormSchema,
+  findMissingOrderFormField,
+  type OrderCustomFieldValue,
+} from '../utils/orderFormSchema'
 
 type Order = {
   id?: number;
@@ -76,6 +83,7 @@ type Order = {
   paymentMethod?: string;
   createdAt: string;
   updatedAt?: string;
+  customFields?: OrderCustomFieldValue[];
 }
 
 type Brand = {
@@ -413,6 +421,10 @@ function calculateStatsFromOrders() {
         inspection:
           typeof raw.inspection === 'string' ? JSON.parse(raw.inspection || '{}') : raw.inspection || {},
         wishes: typeof raw.wishes === 'string' ? JSON.parse(raw.wishes || '{}') : raw.wishes || {},
+        customFields:
+          typeof raw.customFields === 'string'
+            ? JSON.parse(raw.customFields || '[]')
+            : raw.customFields || [],
         problems: raw.problems || [],
       }
 
@@ -1300,6 +1312,9 @@ function EditOrderModal({
     onSite: order.onSite || false,
     paymentMethod: order.paymentMethod || 'cash'
   });
+  const [customValues, setCustomValues] = useState<Record<string, any>>(
+    customFieldValuesToRecord(order.customFields),
+  )
 
   const [loading, setLoading] = useState(false);
   const [historyLoading, setHistoryLoading] = useState(false)
@@ -1308,6 +1323,7 @@ function EditOrderModal({
   const [historySaving, setHistorySaving] = useState(false)
   const [historyUploading, setHistoryUploading] = useState(false)
   const statuses = dynamicStatuses.length ? dynamicStatuses : [...ORDER_STATUSES];
+  const orderFormSchema = settings?.orderFormSchema || defaultOrderFormSchema()
 
   async function loadHistory() {
     if (!order?.id) return
@@ -1425,14 +1441,15 @@ function EditOrderModal({
   ];
 
   const handleSubmit = async () => {
-    if (!form.client || !form.phone || !form.problem) {
-      alert('Заполните обязательные поля: клиент, телефон, проблема');
+    const missing = findMissingOrderFormField(orderFormSchema, form as any, customValues)
+    if (missing) {
+      alert(`Заполните обязательное поле: ${missing}`);
       return;
     }
 
     setLoading(true);
     try {
-      await onSave(form);
+      await onSave({ ...form, customFields: customValues as any });
     } finally {
       setLoading(false);
     }
@@ -1565,6 +1582,12 @@ function EditOrderModal({
               parts={form.parts || []}
               partsWrittenOff={form.partsWrittenOff}
               onChange={(parts) => setForm((prev) => ({ ...prev, parts }))}
+            />
+
+            <CustomOrderFields
+              fields={orderFormSchema.custom}
+              values={customValues}
+              onChange={(id, value) => setCustomValues((prev) => ({ ...prev, [id]: value }))}
             />
 
             <div className='md:col-span-2'>
@@ -1943,6 +1966,7 @@ function OrderModal({
   const [signatureOpen, setSignatureOpen] = useState(false)
   const [saving, setSaving] = useState(false)
   const [createdOrder, setCreatedOrder] = useState<Order | null>(null)
+  const [customValues, setCustomValues] = useState<Record<string, any>>({})
   const catalog = useDeviceCatalog()
   useLockBodyScroll(true)
 
@@ -2053,12 +2077,9 @@ function OrderModal({
   }
 
   const validateRequired = () => {
-    if (!form.client.trim() || !form.phone.trim()) {
-      alert('Укажите ФИО и телефон клиента')
-      return false
-    }
-    if (!form.problem.trim()) {
-      alert('Укажите неисправность')
+    const missing = findMissingOrderFormField(orderFormSchema, form, customValues)
+    if (missing) {
+      alert(`Заполните обязательное поле: ${missing}`)
       return false
     }
     return true
@@ -2103,6 +2124,7 @@ function OrderModal({
           costPrice: totalCostPrice,
           clientId: selectedClientId || undefined,
           clientSignatureData: clientSignatureData || undefined,
+          customFields: customValues,
           createdAt: new Date().toISOString()
         })
       });
@@ -2153,8 +2175,11 @@ function OrderModal({
     return phone;
   };
 
-  const { statuses: createStatuses } = useOrderStatuses()
+  const { statuses: createStatuses, settings: createSettings } = useOrderStatuses()
   const statuses = createStatuses.length ? createStatuses : [...ORDER_STATUSES];
+  const orderFormSchema = createSettings?.orderFormSchema || defaultOrderFormSchema()
+  const showField = (key: keyof typeof orderFormSchema.standard) => orderFormSchema.standard[key]?.visible !== false
+  const requiredField = (key: keyof typeof orderFormSchema.standard) => Boolean(orderFormSchema.standard[key]?.required)
 
   useEffect(() => {
     if (!statuses.length) return
@@ -2305,8 +2330,8 @@ function OrderModal({
               </div>
             </div>
 
-            <div className="md:col-span-2">
-              <label className="label">Email</label>
+            {showField('email') && <div className="md:col-span-2">
+              <label className="label">Email{requiredField('email') ? ' *' : ''}</label>
               <input
                 type="email"
                 className="input"
@@ -2314,9 +2339,9 @@ function OrderModal({
                 onChange={(e) => setForm(prev => ({...prev, email: e.target.value}))}
                 placeholder="email@example.com"
               />
-            </div>
+            </div>}
             
-            <div><label className='label'>Статус</label><Select className='select' value={form.status} onChange={(e) => setForm({...form, status: e.target.value})}>{statuses.map(status => <option key={status} value={status}>{status}</option>)}</Select></div>
+            {showField('status') && <div><label className='label'>Статус</label><Select className='select' value={form.status} onChange={(e) => setForm({...form, status: e.target.value})}>{statuses.map(status => <option key={status} value={status}>{status}</option>)}</Select></div>}
 
             <div className='md:col-span-2 p-4 bg-surface rounded-xl border border-border'>
               <h3 className='font-semibold text-sm mb-3'>Устройство и неисправность</h3>
@@ -2338,37 +2363,37 @@ function OrderModal({
               />
             </div>
 
-            <div>
-              <label className='label'>Цвет</label>
+            {showField('color') && <div>
+              <label className='label'>Цвет{requiredField('color') ? ' *' : ''}</label>
               <input className='input' value={(form as any).color || ''} onChange={(e) => setForm(prev => ({...prev, color: e.target.value}))} placeholder='Например: черный' />
-            </div>
+            </div>}
 
-            <div>
-              <label className='label'>IMEI</label>
+            {showField('imei') && <div>
+              <label className='label'>IMEI{requiredField('imei') ? ' *' : ''}</label>
               <input className='input' value={(form as any).imei || ''} onChange={(e) => setForm(prev => ({...prev, imei: e.target.value}))} placeholder='IMEI' />
-            </div>
+            </div>}
 
-            <div>
-              <label className='label'>S/N</label>
+            {showField('serialNumber') && <div>
+              <label className='label'>S/N{requiredField('serialNumber') ? ' *' : ''}</label>
               <input className='input' value={(form as any).serialNumber || ''} onChange={(e) => setForm(prev => ({...prev, serialNumber: e.target.value}))} placeholder='Серийный номер' />
-            </div>
+            </div>}
 
-            <div className='md:col-span-2'>
-              <label className='label'>Комплектация</label>
+            {showField('equipment') && <div className='md:col-span-2'>
+              <label className='label'>Комплектация{requiredField('equipment') ? ' *' : ''}</label>
               <input className='input' value={(form as any).equipment || ''} onChange={(e) => setForm(prev => ({...prev, equipment: e.target.value}))} placeholder='Например: кабель, чехол, коробка' />
-            </div>
+            </div>}
 
-            <div>
-              <label className='label'>Пароль</label>
+            {showField('devicePassword') && <div>
+              <label className='label'>Пароль{requiredField('devicePassword') ? ' *' : ''}</label>
               <input className='input' value={(form as any).devicePassword || ''} onChange={(e) => setForm(prev => ({...prev, devicePassword: e.target.value}))} placeholder='Пароль/код' />
-            </div>
+            </div>}
 
-            <div className='md:col-span-2'>
-              <label className='label'>Адрес клиента</label>
+            {showField('clientAddress') && <div className='md:col-span-2'>
+              <label className='label'>Адрес клиента{requiredField('clientAddress') ? ' *' : ''}</label>
               <input className='input' value={(form as any).clientAddress || ''} onChange={(e) => setForm(prev => ({...prev, clientAddress: e.target.value}))} placeholder='Адрес клиента' />
-            </div>
+            </div>}
 
-            <OrderPricingFields
+            {showField('pricing') && <OrderPricingFields
               prepayment={(form as any).prepayment || ''}
               estimatedPrice={(form as any).estimatedPrice || ''}
               costPrice={form.costPrice}
@@ -2384,32 +2409,32 @@ function OrderModal({
               onPaymentMethodChange={(value) => setForm((prev) => ({ ...prev, paymentMethod: value }))}
               onWarrantyChange={(checked) => setForm((prev) => ({ ...prev, warranty: checked }))}
               onOnSiteChange={(checked) => setForm((prev) => ({ ...prev, onSite: checked }))}
-            />
+            />}
 
-            <div>
-              <label className='label'>Менеджер</label>
+            {showField('managerName') && <div>
+              <label className='label'>Менеджер{requiredField('managerName') ? ' *' : ''}</label>
               <input className='input' value={(form as any).managerName || ''} onChange={(e) => setForm(prev => ({...prev, managerName: e.target.value}))} placeholder='Менеджер' />
-            </div>
+            </div>}
 
-            <div>
-              <label className='label'>Исполнитель</label>
+            {showField('executorName') && <div>
+              <label className='label'>Исполнитель{requiredField('executorName') ? ' *' : ''}</label>
               <input className='input' value={(form as any).executorName || ''} onChange={(e) => setForm(prev => ({...prev, executorName: e.target.value}))} placeholder='Исполнитель' />
-            </div>
+            </div>}
 
-            <div>
-              <label className='label'>Срок</label>
+            {showField('dueAt') && <div>
+              <label className='label'>Срок{requiredField('dueAt') ? ' *' : ''}</label>
               <input type='datetime-local' className='input' value={(form as any).dueAt ? String((form as any).dueAt).slice(0, 16) : ''} onChange={(e) => setForm(prev => ({...prev, dueAt: e.target.value}))} />
-            </div>
+            </div>}
 
-            <div className='flex items-center gap-4'>
+            {showField('isUrgent') && <div className='flex items-center gap-4'>
               <label className='flex items-center gap-2 cursor-pointer'>
                 <input type='checkbox' checked={Boolean((form as any).isUrgent)} onChange={(e) => setForm(prev => ({...prev, isUrgent: e.target.checked}))} className='rounded border-border' />
                 <span className='text-sm'>Срочно</span>
               </label>
-            </div>
+            </div>}
 
-            <div className='md:col-span-2'>
-              <label className='label'>Заметки приемщика</label>
+            {showField('receiverNotes') && <div className='md:col-span-2'>
+              <label className='label'>Заметки приемщика{requiredField('receiverNotes') ? ' *' : ''}</label>
               <textarea
                 className='textarea'
                 value={(form as any).receiverNotes || ''}
@@ -2417,12 +2442,18 @@ function OrderModal({
                 placeholder='Заметки приемщика...'
                 rows={2}
               />
-            </div>
+            </div>}
 
-            <div className='md:col-span-2'>
-              <label className='label'>Дополнительное описание</label>
+            {showField('description') && <div className='md:col-span-2'>
+              <label className='label'>Дополнительное описание{requiredField('description') ? ' *' : ''}</label>
               <textarea className='textarea' value={form.description} onChange={(e) => setForm({...form, description: e.target.value})} placeholder='Дополнительные заметки...' rows={3}/>
-            </div>
+            </div>}
+
+            <CustomOrderFields
+              fields={orderFormSchema.custom}
+              values={customValues}
+              onChange={(id, value) => setCustomValues((prev) => ({ ...prev, [id]: value }))}
+            />
           </div>
 
           <div className='flex flex-col sm:flex-row justify-end gap-3 mt-6 sm:mt-8 pt-6 border-t border-border'>

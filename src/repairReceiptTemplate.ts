@@ -41,6 +41,12 @@ export type RepairReceiptInput = {
     inspection?: Record<string, any>
     wishes?: Record<string, any>
     problems?: Array<{ problemName?: string; problemDescription?: string }>
+    customFields?: Array<{
+      id?: string
+      label?: string
+      type?: string
+      value?: string | boolean | string[]
+    }>
   }
   documentDate?: string
   trackUrl?: string
@@ -130,6 +136,14 @@ export function renderRepairReceiptHtml(input: RepairReceiptInput) {
     : ''
   const clientSignature = String(o.clientSignatureUrl || '').trim()
   const signedAt = o.clientSignedAt ? fmtDateTime(o.clientSignedAt) : ''
+  const customFields = Array.isArray(o.customFields)
+    ? o.customFields.filter((field) => field?.label)
+    : []
+  const customValue = (field: (typeof customFields)[number]) => {
+    if (Array.isArray(field.value)) return field.value.join(', ')
+    if (field.type === 'checkbox') return field.value ? 'Да' : 'Нет'
+    return String(field.value ?? '')
+  }
 
   const body = `
 <div class="sheet">
@@ -181,6 +195,19 @@ export function renderRepairReceiptHtml(input: RepairReceiptInput) {
       <div class="full"><span>Состояние при приёме</span><b>${val(condition)}</b></div>
     </div>
   </section>
+
+  ${
+    customFields.length
+      ? `<section class="card">
+          <h2>Дополнительные сведения</h2>
+          <div class="grid2">
+            ${customFields.map((field) => `
+              <div><span>${val(field.label)}</span><b>${val(customValue(field))}</b></div>
+            `).join('')}
+          </div>
+        </section>`
+      : ''
+  }
 
   <section class="card money-card">
     <div class="grid2">

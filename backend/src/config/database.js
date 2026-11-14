@@ -98,6 +98,7 @@ function migrateLegacySchema() {
   addColumnIfMissing('orders', 'acceptanceTermsVersion TEXT DEFAULT ""');
   addColumnIfMissing('orders', 'acceptanceSnapshot TEXT DEFAULT "{}"');
   addColumnIfMissing('orders', 'publicToken TEXT DEFAULT ""');
+  addColumnIfMissing('orders', 'customFields TEXT DEFAULT "[]"');
   db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_orders_public_token ON orders(publicToken) WHERE publicToken IS NOT NULL AND publicToken != '';`);
   addColumnIfMissing('companies', 'settingsJson TEXT DEFAULT "{}"');
   addColumnIfMissing('company_documents', 'costTotal REAL DEFAULT 0');

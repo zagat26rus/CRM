@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { db, getCurrentTime } = require('../config/database');
 const { requireAuth, requireRole } = require('../middlewares/auth');
-const { getCompanySettings, mergeCompanySettings } = require('../utils/companySettings');
+const { getCompanySettings, mergeCompanySettings, normalizeOrderFormSchema } = require('../utils/companySettings');
 const { publicClientSms, sendSms } = require('../utils/smsService');
 
 router.use(requireAuth);
@@ -61,6 +61,7 @@ router.put('/settings', requireRole(['owner', 'admin']), (req, res) => {
       aiPartsSearch,
       clientSms,
       dailyDigest,
+      orderFormSchema,
     } = req.body || {};
     const patch = {};
 
@@ -105,6 +106,13 @@ router.put('/settings', requireRole(['owner', 'admin']), (req, res) => {
         return res.status(400).json({ error: 'Некорректные настройки сводки' });
       }
       patch.dailyDigest = dailyDigest;
+    }
+
+    if (orderFormSchema !== undefined) {
+      if (typeof orderFormSchema !== 'object' || orderFormSchema === null) {
+        return res.status(400).json({ error: 'Некорректная схема формы заявки' });
+      }
+      patch.orderFormSchema = normalizeOrderFormSchema(orderFormSchema);
     }
 
     const updated = mergeCompanySettings(db, req.user.companyId, patch);

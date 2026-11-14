@@ -32,6 +32,73 @@ const DEFAULT_DAILY_DIGEST = {
   lowStockThreshold: 2,
 };
 
+const STANDARD_ORDER_FORM_FIELDS = {
+  client: { visible: true, required: true, locked: true },
+  phone: { visible: true, required: true, locked: true },
+  email: { visible: true, required: false },
+  status: { visible: true, required: false, allowRequired: false },
+  device: { visible: true, required: true, locked: true },
+  color: { visible: true, required: false },
+  imei: { visible: true, required: false },
+  serialNumber: { visible: true, required: false },
+  equipment: { visible: true, required: false },
+  devicePassword: { visible: true, required: false },
+  clientAddress: { visible: true, required: false },
+  pricing: { visible: true, required: false, allowRequired: false },
+  managerName: { visible: true, required: false },
+  executorName: { visible: true, required: false },
+  dueAt: { visible: true, required: false },
+  isUrgent: { visible: true, required: false, allowRequired: false },
+  receiverNotes: { visible: true, required: false },
+  description: { visible: true, required: false },
+};
+
+const CUSTOM_FIELD_TYPES = new Set(['text', 'textarea', 'select', 'radio', 'checkbox', 'multiselect']);
+
+function normalizeOrderFormSchema(raw) {
+  const src = raw && typeof raw === 'object' ? raw : {};
+  const standardSrc = src.standard && typeof src.standard === 'object' ? src.standard : {};
+  const standard = {};
+  for (const [key, defaults] of Object.entries(STANDARD_ORDER_FORM_FIELDS)) {
+    const value = standardSrc[key] && typeof standardSrc[key] === 'object' ? standardSrc[key] : {};
+    standard[key] = {
+      visible: defaults.locked ? true : value.visible !== undefined ? Boolean(value.visible) : defaults.visible,
+      required: defaults.locked
+        ? true
+        : defaults.allowRequired === false
+          ? false
+          : value.required !== undefined
+            ? Boolean(value.required)
+            : defaults.required,
+    };
+  }
+
+  const seen = new Set();
+  const custom = [];
+  const rows = Array.isArray(src.custom) ? src.custom.slice(0, 50) : [];
+  for (const row of rows) {
+    if (!row || typeof row !== 'object') continue;
+    const id = String(row.id || '').trim().replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 64);
+    const label = String(row.label || '').trim().slice(0, 100);
+    const type = String(row.type || 'text');
+    if (!id || !label || seen.has(id) || !CUSTOM_FIELD_TYPES.has(type)) continue;
+    seen.add(id);
+    const options = Array.isArray(row.options)
+      ? row.options.map((v) => String(v).trim().slice(0, 100)).filter(Boolean).slice(0, 50)
+      : [];
+    custom.push({
+      id,
+      label,
+      type,
+      visible: row.visible !== false,
+      required: Boolean(row.required),
+      options: ['select', 'radio', 'multiselect'].includes(type) ? options : [],
+      placeholder: String(row.placeholder || '').trim().slice(0, 160),
+    });
+  }
+  return { standard, custom };
+}
+
 function normalizeDailyDigest(raw) {
   const src = raw && typeof raw === 'object' ? raw : {};
   return {
@@ -50,6 +117,7 @@ const DEFAULT_SETTINGS = {
   aiPartsSearch: { ...DEFAULT_AI_PARTS_SEARCH, llm: { ...DEFAULT_AI_PARTS_SEARCH.llm } },
   clientSms: { ...DEFAULT_CLIENT_SMS },
   dailyDigest: { ...DEFAULT_DAILY_DIGEST },
+  orderFormSchema: normalizeOrderFormSchema(null),
 };
 
 function parseSettingsJson(raw) {
@@ -100,6 +168,7 @@ function getCompanySettings(db, companyId) {
   const aiPartsSearch = normalizeAiPartsSearch(parsed.aiPartsSearch);
   const clientSms = normalizeClientSms(parsed.clientSms);
   const dailyDigest = normalizeDailyDigest(parsed.dailyDigest);
+  const orderFormSchema = normalizeOrderFormSchema(parsed.orderFormSchema);
 
   return {
     orderStatuses,
@@ -108,6 +177,7 @@ function getCompanySettings(db, companyId) {
     aiPartsSearch,
     clientSms,
     dailyDigest,
+    orderFormSchema,
   };
 }
 
@@ -133,6 +203,9 @@ function mergeCompanySettings(db, companyId, patch) {
     dailyDigest: patch.dailyDigest
       ? normalizeDailyDigest({ ...current.dailyDigest, ...patch.dailyDigest })
       : current.dailyDigest,
+    orderFormSchema: patch.orderFormSchema !== undefined
+      ? normalizeOrderFormSchema(patch.orderFormSchema)
+      : current.orderFormSchema,
   };
   const { getCurrentTime } = require('../config/database');
   const now = getCurrentTime();
@@ -159,7 +232,9 @@ module.exports = {
   DEFAULT_AI_PARTS_SEARCH,
   DEFAULT_CLIENT_SMS,
   DEFAULT_DAILY_DIGEST,
+  STANDARD_ORDER_FORM_FIELDS,
   normalizeDailyDigest,
+  normalizeOrderFormSchema,
   getCompanySettings,
   mergeCompanySettings,
   getOrderStatusesForCompany,

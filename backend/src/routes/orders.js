@@ -65,6 +65,66 @@ function safeParseJson(text, fallback) {
   }
 }
 
+function hasMeaningfulValue(value) {
+  if (Array.isArray(value)) return value.length > 0;
+  if (typeof value === 'boolean') return value;
+  return String(value ?? '').trim().length > 0;
+}
+
+function prepareCustomFields(companyId, rawValues) {
+  const schema = getCompanySettings(db, companyId).orderFormSchema;
+  const source = Array.isArray(rawValues)
+    ? Object.fromEntries(rawValues.map((row) => [String(row?.id || ''), row?.value]))
+    : rawValues && typeof rawValues === 'object'
+      ? rawValues
+      : {};
+  const entries = [];
+  for (const field of schema.custom.filter((row) => row.visible !== false)) {
+    let value = source[field.id];
+    if (field.type === 'checkbox') value = Boolean(value);
+    else if (field.type === 'multiselect') {
+      value = Array.isArray(value)
+        ? value.map(String).filter((item) => field.options.includes(item)).slice(0, 50)
+        : [];
+    } else {
+      value = String(value ?? '').slice(0, field.type === 'textarea' ? 5000 : 500);
+      if (['select', 'radio'].includes(field.type) && value && !field.options.includes(value)) value = '';
+    }
+    if (field.required && !hasMeaningfulValue(value)) {
+      const error = new Error(`Заполните обязательное поле: ${field.label}`);
+      error.statusCode = 400;
+      throw error;
+    }
+    entries.push({ id: field.id, label: field.label, type: field.type, value });
+  }
+  return entries;
+}
+
+function validateConfiguredStandardFields(companyId, body) {
+  const standard = getCompanySettings(db, companyId).orderFormSchema.standard;
+  const labels = {
+    email: 'Email',
+    color: 'Цвет',
+    imei: 'IMEI',
+    serialNumber: 'S/N',
+    equipment: 'Комплектация',
+    devicePassword: 'Пароль / код устройства',
+    clientAddress: 'Адрес клиента',
+    managerName: 'Менеджер',
+    executorName: 'Исполнитель',
+    dueAt: 'Срок',
+    receiverNotes: 'Заметки приёмщика',
+    description: 'Дополнительное описание',
+  };
+  for (const [key, label] of Object.entries(labels)) {
+    if (standard[key]?.visible && standard[key]?.required && !hasMeaningfulValue(body[key])) {
+      const error = new Error(`Заполните обязательное поле: ${label}`);
+      error.statusCode = 400;
+      throw error;
+    }
+  }
+}
+
 function ensureDir(p) {
   if (!fs.existsSync(p)) fs.mkdirSync(p, { recursive: true });
 }
@@ -684,6 +744,7 @@ function formatOrderResponse(order, problems = [], parts = []) {
     warrantyEndsAt: order.warrantyEndsAt || null,
     inspection: safeParseJson(order.inspection, {}),
     wishes: safeParseJson(order.wishes, {}),
+    customFields: safeParseJson(order.customFields, []),
     problems: problems.map((p) => ({
       id: p.id,
       problemId: p.problemId,
@@ -1062,7 +1123,8 @@ router.post('/', (req, res) => {
       onSite = false,
       paymentMethod = 'cash',
       documentNumber = '',
-      clientSignatureData = ''
+      clientSignatureData = '',
+      customFields = {}
     } = req.body;
     
     if (!client || !phone) {
@@ -1077,6 +1139,9 @@ router.post('/', (req, res) => {
     if (problemsList.length === 0) {
       problemsList.push({ problemName: 'Приём в ремонт', price: Number(price) || 0, costPrice: Number(costPrice) || 0 });
     }
+
+    validateConfiguredStandardFields(req.user.companyId, req.body || {});
+    const preparedCustomFields = prepareCustomFields(req.user.companyId, customFields);
     
     const signatureBuffer = decodeClientSignature(clientSignatureData);
     const now = getCurrentTime();
@@ -1099,8 +1164,8 @@ router.post('/', (req, res) => {
           imei, serialNumber, equipment, devicePassword,
           status, price, costPrice, estimatedPrice, prepayment,
           description, receiverNotes, inspection, wishes, managerName, executorName, dueAt, isUrgent, warranty, onSite,
-          paymentMethod, documentNumber, publicToken, createdAt, updatedAt
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          paymentMethod, customFields, documentNumber, publicToken, createdAt, updatedAt
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
       
       const orderResult = insertOrder.run(
@@ -1134,6 +1199,7 @@ router.post('/', (req, res) => {
         warranty ? 1 : 0,
         onSite ? 1 : 0,
         paymentMethod,
+        JSON.stringify(preparedCustomFields),
         docNum,
         publicToken,
         now,
@@ -1174,6 +1240,7 @@ router.post('/', (req, res) => {
             problemName: String(p.problemName || ''),
             problemDescription: String(p.problemDescription || ''),
           })),
+          customFields: preparedCustomFields,
           clientSignatureUrl,
           clientSignedAt,
           acceptanceTermsVersion: ACCEPTANCE_TERMS_VERSION,
@@ -1243,6 +1310,7 @@ router.post('/', (req, res) => {
       onSite: Boolean(newOrder.onSite),
       inspection: safeParseJson(newOrder.inspection, {}),
       wishes: safeParseJson(newOrder.wishes, {}),
+      customFields: safeParseJson(newOrder.customFields, []),
       problems: orderProblems.map(p => ({
         id: p.id,
         problemId: p.problemId,
@@ -1319,6 +1387,7 @@ router.put('/:id', (req, res) => {
       }
     } else {
       // Полное обновление
+      validateConfiguredStandardFields(req.user.companyId, { ...existingOrder, ...updates });
       const allowedFields = [
         'client',
         'phone',
@@ -1351,7 +1420,8 @@ router.put('/:id', (req, res) => {
         'onSite',
         'paymentMethod',
         'email',
-        'documentNumber'
+        'documentNumber',
+        'customFields'
       ];
       
       const fields = [];
@@ -1368,6 +1438,8 @@ router.put('/:id', (req, res) => {
             params.push(Number(updates[field]) || 0);
           } else if (field === 'inspection' || field === 'wishes') {
             params.push(JSON.stringify(updates[field] || {}));
+          } else if (field === 'customFields') {
+            params.push(JSON.stringify(prepareCustomFields(req.user.companyId, updates[field])));
           } else if (field === 'phone') {
             params.push(normalizePhone(updates[field]));
           } else {

@@ -1,11 +1,17 @@
 import { useEffect, useState } from 'react'
 import { apiFetch } from '../api'
 import { ORDER_STATUSES as FALLBACK_STATUSES } from '../utils/orderStatuses'
+import {
+  defaultOrderFormSchema,
+  normalizeOrderFormSchema,
+  type OrderFormSchema,
+} from '../utils/orderFormSchema'
 
 type CompanySettings = {
   orderStatuses: string[]
   notificationTemplates: Record<string, string>
   warrantyDaysDefault: number
+  orderFormSchema: OrderFormSchema
 }
 
 let cache: CompanySettings | null = null
@@ -22,6 +28,7 @@ export async function fetchCompanySettings(): Promise<CompanySettings> {
         orderStatuses: Array.isArray(data.orderStatuses) && data.orderStatuses.length ? data.orderStatuses : [...FALLBACK_STATUSES],
         notificationTemplates: data.notificationTemplates || {},
         warrantyDaysDefault: Number(data.warrantyDaysDefault) || 90,
+        orderFormSchema: normalizeOrderFormSchema(data.orderFormSchema),
       }
       return cache
     })
@@ -30,6 +37,7 @@ export async function fetchCompanySettings(): Promise<CompanySettings> {
         orderStatuses: [...FALLBACK_STATUSES],
         notificationTemplates: {},
         warrantyDaysDefault: 90,
+        orderFormSchema: defaultOrderFormSchema(),
       }
       return cache
     })
