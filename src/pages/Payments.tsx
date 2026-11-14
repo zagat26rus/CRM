@@ -731,7 +731,7 @@ async function addTx(
                     onClick={handleModalSave}
                     disabled={!modalSum || parseFloat(modalSum) <= 0}
                   >
-                    Сохранить {open.toLowerCase()}
+                    {editing ? 'Сохранить изменения' : `Сохранить ${open?.toLowerCase() || ''}`}
                   </button>
                 </div>
               </div>
