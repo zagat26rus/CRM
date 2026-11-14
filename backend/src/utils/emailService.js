@@ -100,6 +100,33 @@ async function sendVerificationEmail({ email, name, token }) {
   await getTransport().sendMail({ from: c.from, to: email, subject, text, html });
 }
 
+async function sendPasswordResetEmail({ email, name, token }) {
+  const c = config();
+  const link = `${c.publicSiteUrl}/reset-password?token=${encodeURIComponent(token)}`;
+  const subject = 'Восстановление пароля — FixNet CRM';
+  const text = [
+    `Здравствуйте, ${name || 'пользователь'}!`,
+    '',
+    'Чтобы задать новый пароль в FixNet CRM, откройте ссылку:',
+    link,
+    '',
+    'Ссылка действует 1 час и сработает один раз. Если вы не запрашивали сброс, просто проигнорируйте письмо — пароль останется прежним.',
+  ].join('\n');
+  const html = `
+    <div style="font-family:Arial,sans-serif;max-width:560px;margin:auto;color:#111827">
+      <h2>Восстановление пароля</h2>
+      <p>Здравствуйте, ${esc(name || 'пользователь')}!</p>
+      <p>Нажмите кнопку, чтобы задать новый пароль для FixNet CRM.</p>
+      <p style="margin:28px 0">
+        <a href="${esc(link)}" style="background:#f5c400;color:#111827;text-decoration:none;padding:12px 20px;border-radius:10px;font-weight:700">
+          Задать новый пароль
+        </a>
+      </p>
+      <p style="font-size:13px;color:#6b7280">Ссылка действует 1 час и только один раз. Если вы не запрашивали сброс, проигнорируйте письмо — пароль не изменится.</p>
+    </div>`;
+  await getTransport().sendMail({ from: c.from, to: email, subject, text, html });
+}
+
 async function verifyTransport() {
   if (!isConfigured()) return { configured: false, ok: false };
   try {
@@ -110,5 +137,5 @@ async function verifyTransport() {
   }
 }
 
-module.exports = { config, isConfigured, sendVerificationEmail, verifyTransport };
+module.exports = { config, isConfigured, sendVerificationEmail, sendPasswordResetEmail, verifyTransport };
 

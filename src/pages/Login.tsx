@@ -15,6 +15,8 @@ export default function Login() {
   const [notice, setNotice] = useState<string | null>(null)
   const [verificationEmail, setVerificationEmail] = useState('')
   const [resending, setResending] = useState(false)
+  const [recovery, setRecovery] = useState(false)
+  const [recoverySent, setRecoverySent] = useState(false)
 
   useEffect(() => {
     if (auth.token) {
@@ -36,6 +38,42 @@ export default function Login() {
     } finally {
       setLoading(false)
     }
+  }
+
+  async function requestReset() {
+    setError(null)
+    setNotice(null)
+    setLoading(true)
+    try {
+      const res = await apiFetch('/auth/password-reset/request', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data?.error || 'Не удалось отправить письмо')
+      setRecoverySent(true)
+      setNotice(data?.message || 'Если этот адрес зарегистрирован, мы отправили на него ссылку.')
+    } catch (e: any) {
+      setError(e?.message || 'Не удалось отправить письмо')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  function openRecovery() {
+    setRecovery(true)
+    setRecoverySent(false)
+    setError(null)
+    setNotice(null)
+    setVerificationEmail('')
+  }
+
+  function closeRecovery() {
+    setRecovery(false)
+    setRecoverySent(false)
+    setError(null)
+    setNotice(null)
   }
 
   async function resendVerification() {
@@ -62,8 +100,10 @@ export default function Login() {
       <div className='card w-full max-w-md'>
         <div className='card-inner space-y-5'>
           <div>
-            <h1 className='text-2xl font-bold'>Вход</h1>
-            <div className='text-sm text-muted mt-1'>Войдите в систему</div>
+            <h1 className='text-2xl font-bold'>{recovery ? 'Восстановление пароля' : 'Вход'}</h1>
+            <div className='text-sm text-muted mt-1'>
+              {recovery ? 'Отправим ссылку для нового пароля на почту' : 'Войдите в систему'}
+            </div>
           </div>
 
           {error && <div className='p-3 border border-danger text-danger rounded-xl bg-bg'>{error}</div>}
@@ -82,36 +122,59 @@ export default function Login() {
               onChange={(e) => setEmail(e.target.value)}
               placeholder='email@example.com'
               autoComplete='username'
-            />
-          </div>
-          <div>
-            <label className='label'>Пароль</label>
-            <input
-              className='input'
-              type='password'
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder='••••••••'
-              autoComplete='current-password'
               onKeyDown={(e) => {
-                if (e.key === 'Enter' && email && password && !loading) submit()
+                if (e.key === 'Enter' && recovery && email && !loading) requestReset()
               }}
             />
           </div>
+          {!recovery && (
+            <>
+              <div>
+                <label className='label'>Пароль</label>
+                <input
+                  className='input'
+                  type='password'
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder='••••••••'
+                  autoComplete='current-password'
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && email && password && !loading) submit()
+                  }}
+                />
+                <div className='mt-2 text-right'>
+                  <button type='button' className='text-sm link' onClick={openRecovery}>
+                    Забыли пароль?
+                  </button>
+                </div>
+              </div>
 
-          <label className='flex items-center gap-2 text-sm text-muted cursor-pointer select-none'>
-            <input
-              type='checkbox'
-              checked={remember}
-              onChange={(e) => setRemember(e.target.checked)}
-              className='accent-primary'
-            />
-            Запомнить меня и входить автоматически
-          </label>
+              <label className='flex items-center gap-2 text-sm text-muted cursor-pointer select-none'>
+                <input
+                  type='checkbox'
+                  checked={remember}
+                  onChange={(e) => setRemember(e.target.checked)}
+                  className='accent-primary'
+                />
+                Запомнить меня и входить автоматически
+              </label>
 
-          <button className='btn w-full' onClick={submit} disabled={loading || !email || !password}>
-            {loading ? 'Вход…' : 'Войти'}
-          </button>
+              <button className='btn w-full' onClick={submit} disabled={loading || !email || !password}>
+                {loading ? 'Вход…' : 'Войти'}
+              </button>
+            </>
+          )}
+
+          {recovery && (
+            <>
+              <button className='btn w-full' onClick={requestReset} disabled={loading || !email}>
+                {loading ? 'Отправка…' : recoverySent ? 'Отправить ссылку ещё раз' : 'Отправить ссылку'}
+              </button>
+              <button type='button' className='btn secondary w-full' onClick={closeRecovery}>
+                Вернуться ко входу
+              </button>
+            </>
+          )}
 
           <div className='text-sm text-muted'>
             Нет аккаунта? <Link className='link' to='/register'>Регистрация</Link>
