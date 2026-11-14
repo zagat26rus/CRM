@@ -481,11 +481,117 @@ router.put('/password', requireAuth, (req, res) => {
       now,
       req.user.id
     );
+    db.prepare('DELETE FROM password_reset_tokens WHERE userId = ? AND usedAt IS NULL').run(req.user.id);
 
     res.json({ ok: true });
   } catch (e) {
     console.error('Ошибка смены пароля:', e);
     res.status(500).json({ error: 'Ошибка смены пароля' });
+  }
+});
+
+const RESET_GENERIC = {
+  ok: true,
+  message: 'Если этот адрес зарегистрирован, мы отправили на него ссылку для нового пароля.',
+};
+
+router.post('/password-reset/request', async (req, res) => {
+  try {
+    if (!emailService.isConfigured()) {
+      return res.status(503).json({ error: 'Отправка почты пока не настроена' });
+    }
+    const email = String(req.body?.email || '').trim().toLowerCase();
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 255) {
+      return res.status(400).json({ error: 'Введите корректный email' });
+    }
+    const user = db.prepare('SELECT * FROM users WHERE email = ?').get(email);
+    if (!user || !user.isActive) return res.json(RESET_GENERIC);
+
+    const hourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+    const recent = db
+      .prepare(
+        `SELECT COUNT(*) AS count, MAX(createdAt) AS lastAt
+         FROM password_reset_tokens WHERE userId = ? AND createdAt >= ?`
+      )
+      .get(user.id, hourAgo);
+    const lastMs = recent?.lastAt ? new Date(recent.lastAt).getTime() : 0;
+    if ((Number(recent?.count) || 0) >= 5 || (lastMs && Date.now() - lastMs < 60_000)) {
+      return res.json(RESET_GENERIC);
+    }
+
+    const token = base64url(crypto.randomBytes(32));
+    const tokenHash = sha256(token);
+    const now = getCurrentTime();
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+    db.prepare('DELETE FROM password_reset_tokens WHERE userId = ? AND usedAt IS NULL').run(user.id);
+    db.prepare(
+      'INSERT INTO password_reset_tokens (userId, tokenHash, expiresAt, createdAt) VALUES (?, ?, ?, ?)'
+    ).run(user.id, tokenHash, expiresAt, now);
+    try {
+      await emailService.sendPasswordResetEmail({ email: user.email, name: user.name, token });
+    } catch (mailError) {
+      db.prepare('DELETE FROM password_reset_tokens WHERE tokenHash = ?').run(tokenHash);
+      console.error('Ошибка отправки письма для сброса пароля:', mailError?.message || mailError);
+      return res.status(502).json({ error: 'Не удалось отправить письмо. Попробуйте ещё раз через минуту.' });
+    }
+    return res.json(RESET_GENERIC);
+  } catch (error) {
+    console.error('Ошибка запроса сброса пароля:', error?.message || error);
+    return res.status(500).json({ error: 'Не удалось подготовить сброс пароля' });
+  }
+});
+
+router.post('/password-reset/confirm', (req, res) => {
+  try {
+    const token = String(req.body?.token || '').trim();
+    const password = String(req.body?.password || '');
+    if (token.length < 32 || token.length > 200) {
+      return res.status(400).json({ error: 'Ссылка недействительна или истекла' });
+    }
+    if (password.length < 6 || password.length > 200) {
+      return res.status(400).json({ error: 'Пароль должен быть от 6 до 200 символов' });
+    }
+    const tokenHash = sha256(token);
+    const row = db
+      .prepare(
+        `SELECT t.id AS tokenId, t.userId, t.expiresAt, t.usedAt, u.isActive
+         FROM password_reset_tokens t
+         JOIN users u ON u.id = t.userId
+         WHERE t.tokenHash = ?`
+      )
+      .get(tokenHash);
+    if (!row || row.usedAt || !row.isActive || new Date(row.expiresAt).getTime() <= Date.now()) {
+      return res.status(400).json({
+        error: 'Ссылка недействительна или истекла. Запросите новую на странице входа.',
+      });
+    }
+
+    const { salt, hash } = createPasswordHash(password);
+    const now = getCurrentTime();
+    const apply = db.transaction(() => {
+      db.prepare(
+        `UPDATE users
+         SET passwordSalt = ?, passwordHash = ?, emailVerifiedAt = COALESCE(emailVerifiedAt, ?),
+             emailVerificationRequired = 0, updatedAt = ?
+         WHERE id = ?`
+      ).run(salt, hash, now, now, row.userId);
+      db.prepare('UPDATE password_reset_tokens SET usedAt = ? WHERE id = ?').run(now, row.tokenId);
+      db.prepare('DELETE FROM password_reset_tokens WHERE userId = ? AND usedAt IS NULL').run(row.userId);
+      db.prepare('DELETE FROM sessions WHERE userId = ?').run(row.userId);
+    });
+    apply();
+
+    const user = db.prepare('SELECT * FROM users WHERE id = ?').get(row.userId);
+    const comp = db.prepare('SELECT * FROM companies WHERE id = ?').get(user.companyId);
+    const session = createSession(user.id);
+    res.json({
+      token: session.token,
+      user: safeUserRow(user),
+      company: comp ? { id: comp.id, name: comp.name } : null,
+    });
+  } catch (error) {
+    console.error('Ошибка сброса пароля:', error?.message || error);
+    res.status(500).json({ error: 'Не удалось сменить пароль' });
   }
 });
 

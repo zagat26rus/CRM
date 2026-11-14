@@ -490,6 +490,19 @@ function initDatabase() {
     );
   `);
   db.exec(`CREATE INDEX IF NOT EXISTS idx_email_verification_user ON email_verification_tokens(userId, usedAt);`);
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS password_reset_tokens (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      userId INTEGER NOT NULL,
+      tokenHash TEXT NOT NULL UNIQUE,
+      expiresAt TEXT NOT NULL,
+      usedAt TEXT DEFAULT NULL,
+      createdAt TEXT,
+      FOREIGN KEY (userId) REFERENCES users(id) ON DELETE CASCADE
+    );
+  `);
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_password_reset_user ON password_reset_tokens(userId, usedAt);`);
   db.exec(`CREATE INDEX IF NOT EXISTS idx_sessions_userId ON sessions(userId);`);
 
   db.exec(`
