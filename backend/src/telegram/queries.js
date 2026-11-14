@@ -230,6 +230,26 @@ function listStockItems(companyId, { categoryId = null, filter = 'all', q = '', 
   return { rows, total, page, pageSize: ITEMS_PAGE_SIZE, threshold };
 }
 
+function cashRegisterBalances(companyId) {
+  if (!hasTable('cash_registers')) return [];
+  return db
+    .prepare(
+      `SELECT cr.id, cr.name, cr.isDefault, cr.isActive,
+              COALESCE(SUM(CASE WHEN p.type = 'income' THEN p.amount ELSE 0 END),0) AS income,
+              COALESCE(SUM(CASE WHEN p.type = 'expense' THEN p.amount ELSE 0 END),0) AS expense
+       FROM cash_registers cr
+       LEFT JOIN payments p ON p.cashRegisterId = cr.id AND p.companyId = cr.companyId
+       WHERE cr.companyId = ? AND COALESCE(cr.isActive,1) = 1
+       GROUP BY cr.id
+       ORDER BY cr.isDefault DESC, cr.name COLLATE NOCASE`
+    )
+    .all(companyId)
+    .map((row) => ({
+      ...row,
+      balance: Number(row.income || 0) - Number(row.expense || 0),
+    }));
+}
+
 // ---------- Сводка ----------
 
 function periodSummary(companyId, range, { withMoney = true } = {}) {
@@ -243,7 +263,8 @@ function periodSummary(companyId, range, { withMoney = true } = {}) {
       .prepare(
         `SELECT p.type, COALESCE(SUM(p.amount),0) AS total, COUNT(*) AS cnt
          FROM payments p
-         WHERE p.companyId = ? AND ${dateExpr} >= ? AND ${dateExpr} < ?
+         WHERE p.companyId = ? AND p.transferGroupId IS NULL
+           AND ${dateExpr} >= ? AND ${dateExpr} < ?
          GROUP BY p.type`
       )
       .all(companyId, fromIso, toIso);
@@ -254,12 +275,14 @@ function periodSummary(companyId, range, { withMoney = true } = {}) {
     out.expense = exp.total;
     out.expenseCount = exp.cnt;
     out.profit = inc.total - exp.total;
+    out.salesCount = inc.cnt;
 
     out.bySource = db
       .prepare(
         `SELECT COALESCE(NULLIF(p.saleCategory,''),'other') AS cat, COALESCE(SUM(p.amount),0) AS total
          FROM payments p
-         WHERE p.companyId = ? AND p.type = 'income' AND ${dateExpr} >= ? AND ${dateExpr} < ?
+         WHERE p.companyId = ? AND p.type = 'income' AND p.transferGroupId IS NULL
+           AND ${dateExpr} >= ? AND ${dateExpr} < ?
          GROUP BY cat ORDER BY total DESC`
       )
       .all(companyId, fromIso, toIso)
@@ -269,8 +292,22 @@ function periodSummary(companyId, range, { withMoney = true } = {}) {
       .prepare(
         `SELECT COALESCE(NULLIF(p.method,''),'other') AS method, COALESCE(SUM(p.amount),0) AS total
          FROM payments p
-         WHERE p.companyId = ? AND p.type = 'income' AND ${dateExpr} >= ? AND ${dateExpr} < ?
+         WHERE p.companyId = ? AND p.type = 'income' AND p.transferGroupId IS NULL
+           AND ${dateExpr} >= ? AND ${dateExpr} < ?
          GROUP BY method ORDER BY total DESC`
+      )
+      .all(companyId, fromIso, toIso);
+
+    out.byExpense = db
+      .prepare(
+        `SELECT COALESCE(NULLIF(c.name,''), NULLIF(p.description,''), 'Прочее') AS label,
+                COALESCE(SUM(p.amount),0) AS total,
+                COUNT(*) AS cnt
+         FROM payments p
+         LEFT JOIN categories c ON c.id = p.categoryId AND c.companyId = p.companyId
+         WHERE p.companyId = ? AND p.type = 'expense' AND p.transferGroupId IS NULL
+           AND ${dateExpr} >= ? AND ${dateExpr} < ?
+         GROUP BY label ORDER BY total DESC LIMIT 6`
       )
       .all(companyId, fromIso, toIso);
 
@@ -282,6 +319,7 @@ function periodSummary(companyId, range, { withMoney = true } = {}) {
       )
       .get(companyId);
     out.balance = bal.inc - bal.exp;
+    out.cashBalances = cashRegisterBalances(companyId);
   }
 
   out.ordersCreated = db
@@ -322,6 +360,19 @@ function periodSummary(companyId, range, { withMoney = true } = {}) {
     out.shopTotal = shop.s;
   }
 
+  if (hasTable('inventory_sales')) {
+    const inventorySales = db
+      .prepare(
+        `SELECT COUNT(*) AS transactions, COALESCE(SUM(quantity),0) AS units, COALESCE(SUM(total),0) AS total
+         FROM inventory_sales
+         WHERE companyId = ? AND createdAt >= ? AND createdAt < ?`
+      )
+      .get(companyId, fromIso, toIso);
+    out.inventorySaleTransactions = inventorySales.transactions;
+    out.inventorySaleUnits = inventorySales.units;
+    out.inventorySaleTotal = inventorySales.total;
+  }
+
   out.tasksOpen = db
     .prepare('SELECT COUNT(*) AS c FROM tasks WHERE companyId = ? AND COALESCE(isCompleted,0) = 0')
     .get(companyId).c;
@@ -334,11 +385,29 @@ function periodSummary(companyId, range, { withMoney = true } = {}) {
   const stock = stockOverview(companyId);
   out.stockZero = stock.totals.zero;
   out.stockLow = stock.totals.low;
+  const soldSince = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
   out.stockLowItems = db
     .prepare(
-      'SELECT name, quantity, unit FROM inventory_items WHERE companyId = ? AND quantity <= ? ORDER BY quantity, name LIMIT 8'
+      `SELECT i.name, i.quantity, i.unit, i.purchasePrice, COALESCE(s.sold30,0) AS sold30
+       FROM inventory_items i
+       LEFT JOIN (
+         SELECT itemId, SUM(quantity) AS sold30
+         FROM inventory_sales
+         WHERE companyId = ? AND createdAt >= ?
+         GROUP BY itemId
+       ) s ON s.itemId = i.id
+       WHERE i.companyId = ? AND i.quantity <= ?
+       ORDER BY CASE WHEN i.quantity <= 0 THEN 0 ELSE 1 END, sold30 DESC, i.quantity, i.name
+       LIMIT 8`
     )
-    .all(companyId, stock.threshold);
+    .all(companyId, soldSince, companyId, stock.threshold)
+    .map((item) => {
+      const target = Math.max(stock.threshold + 1, Math.ceil(Number(item.sold30 || 0) / 2));
+      return {
+        ...item,
+        recommended: Math.max(1, Math.ceil(target - Number(item.quantity || 0))),
+      };
+    });
   return out;
 }
 
@@ -356,5 +425,6 @@ module.exports = {
   getTask,
   stockOverview,
   listStockItems,
+  cashRegisterBalances,
   periodSummary,
 };

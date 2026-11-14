@@ -350,6 +350,17 @@ router.get('/stats', (req, res) => {
 // Баланс
 router.get('/balance', (req, res) => {
   try {
+    const cashRegisterId = Number(req.query.cashRegisterId);
+    const hasRegisterFilter = Number.isFinite(cashRegisterId) && cashRegisterId > 0;
+    if (req.query.cashRegisterId && !hasRegisterFilter) {
+      return res.status(400).json({ error: 'Некорректная касса' });
+    }
+    if (hasRegisterFilter) {
+      const register = db
+        .prepare('SELECT id FROM cash_registers WHERE id = ? AND companyId = ?')
+        .get(cashRegisterId, req.user.companyId);
+      if (!register) return res.status(404).json({ error: 'Касса не найдена' });
+    }
     const stats = db
       .prepare(
         `
@@ -358,9 +369,10 @@ router.get('/balance', (req, res) => {
         SUM(CASE WHEN type = 'expense' THEN amount ELSE 0 END) as expense
       FROM payments
       WHERE companyId = ?
+        AND (? = 0 OR cashRegisterId = ?)
     `
       )
-      .get(req.user.companyId);
+      .get(req.user.companyId, hasRegisterFilter ? 1 : 0, hasRegisterFilter ? cashRegisterId : 0);
 
     const income = stats.income || 0;
     const expense = stats.expense || 0;

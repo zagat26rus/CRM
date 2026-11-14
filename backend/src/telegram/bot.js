@@ -31,6 +31,7 @@ const HELP_TEXT = [
   '• <b>Новая заявка</b> — принять устройство прямо из бота',
   '• <b>Задачи</b> — свои задачи, отметка о выполнении, постановка новых',
   '• <b>Склад</b> — остатки по категориям, нехватка товара, поиск',
+  '• <b>Кассы</b> — текущий остаток отдельно по каждой кассе',
   '• <b>Сводка</b> — деньги, оборот и заявки за день, вчера, неделю, месяц',
   '• <b>Настройки</b> — какие уведомления получать',
   '',
@@ -500,6 +501,11 @@ function showSummary(S, kind = 'today', edit = false) {
   show(S, { text, kb: v.summaryKeyboard(kind) }, edit);
 }
 
+function showCashRegisters(S, edit = false) {
+  if (!need(S, 'finance_view')) return;
+  show(S, v.cashRegistersView(q.cashRegisterBalances(S.user.companyId)), edit);
+}
+
 // ---------- Настройки ----------
 
 function showSettings(S, edit = false) {
@@ -612,6 +618,8 @@ async function handleCallback(S, data) {
       return showStockSearch(S, S.state.stockQuery || '', n(0), true);
     case 'su':
       return showSummary(S, a[0] || 'today', true);
+    case 'ca':
+      return showCashRegisters(S, true);
     case 'st':
       return showSettings(S, true);
     case 'stn':
@@ -697,6 +705,9 @@ async function handleCommand(S, text) {
     case '/summary':
       S.clearMode();
       return showSummary(S);
+    case '/cash':
+      S.clearMode();
+      return showCashRegisters(S);
     case '/settings':
       S.clearMode();
       return showSettings(S);
@@ -719,6 +730,7 @@ async function handleMessage(S, msg) {
     [v.MENU.newOrder]: () => startNewOrder(S),
     [v.MENU.tasks]: () => showTasks(S),
     [v.MENU.stock]: () => showStock(S),
+    [v.MENU.cash]: () => showCashRegisters(S),
     [v.MENU.summary]: () => showSummary(S),
     [v.MENU.settings]: () => showSettings(S),
   };

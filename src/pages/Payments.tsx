@@ -111,7 +111,8 @@ export default function Payments(){
 
 async function loadBalance() {
   try {
-    const response = await apiFetch('/payments/balance');
+    const query = filterRegister ? `?cashRegisterId=${filterRegister}` : ''
+    const response = await apiFetch(`/payments/balance${query}`);
     if (!response.ok) {
       throw new Error(`Ошибка ${response.status}`);
     }
@@ -125,6 +126,10 @@ async function loadBalance() {
     }
   } catch (error) {
     console.error('Ошибка загрузки баланса:', error);
+    if (filterRegister) {
+      setBalance(0)
+      return
+    }
     // Если не работает /api/payments/balance, используем /api/payments/stats
     try {
       const statsResponse = await apiFetch('/payments/stats');
@@ -336,7 +341,10 @@ async function addTx(
         <div>
           <h1 className='text-2xl font-bold'>Платежи</h1>
           <div className='mt-2 text-lg font-semibold'>
-            Баланс: <span className='text-primary'>{balance.toLocaleString('ru-RU')} ₽</span>
+            {filterRegister
+              ? `Баланс «${registers.find((row) => row.id === filterRegister)?.name || 'касса'}»:`
+              : 'Баланс всех касс:'}{' '}
+            <span className='text-primary'>{balance.toLocaleString('ru-RU')} ₽</span>
           </div>
         </div>
         <div className='grid grid-cols-2 sm:flex gap-2 sm:gap-3 w-full sm:w-auto'>

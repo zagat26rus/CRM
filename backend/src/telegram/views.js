@@ -7,6 +7,7 @@ const MENU = {
   newOrder: 'Новая заявка',
   tasks: 'Задачи',
   stock: 'Склад',
+  cash: 'Кассы',
   summary: 'Сводка',
   settings: 'Настройки',
 };
@@ -40,7 +41,7 @@ function mainMenuKeyboard(prefs) {
   if (p.orders_create) buttons.push(MENU.newOrder);
   if (p.tasks_view) buttons.push(MENU.tasks);
   if (p.stock_view) buttons.push(MENU.stock);
-  if (p.finance_view) buttons.push(MENU.summary);
+  if (p.finance_view) buttons.push(MENU.cash, MENU.summary);
   buttons.push(MENU.settings);
   return { keyboard: chunk(buttons, 2).map((r) => r.map((text) => ({ text }))), resize_keyboard: true, is_persistent: true };
 }
@@ -206,6 +207,22 @@ function stockItemsView(result, { title, prefix, finance }) {
   return { text: lines.join('\n'), kb: inline(kbRows) };
 }
 
+function cashRegistersView(registers) {
+  const total = registers.reduce((sum, row) => sum + Number(row.balance || 0), 0);
+  const lines = ['<b>Остатки по кассам</b>', `Всего: <b>${money(total)}</b>`, ''];
+  if (!registers.length) lines.push('Активных касс нет.');
+  for (const row of registers) {
+    lines.push(
+      `${row.isDefault ? '• ' : ''}<b>${esc(row.name)}</b>: ${money(row.balance)}`,
+      `   приход ${money(row.income)} · расход ${money(row.expense)}`
+    );
+  }
+  return {
+    text: lines.join('\n'),
+    kb: inline([[btn('Обновить', 'ca'), btn('Сводка', 'su:today')], [btn('Меню', 'm')]]),
+  };
+}
+
 // ---------- Сводка ----------
 
 function summaryText(s, label, { withMoney, dateLabel }) {
@@ -221,8 +238,19 @@ function summaryText(s, label, { withMoney, dateLabel }) {
       );
     }
     lines.push(`Расходы (в т.ч. себестоимость): <b>${money(s.expense)}</b> · записей: ${s.expenseCount}`);
+    for (const row of (s.byExpense || []).slice(0, 5)) {
+      lines.push(`   ${esc(clip(row.label, 45))}: ${money(row.total)} (${row.cnt})`);
+    }
     lines.push(`Прибыль (оборот минус расходы): <b>${money(s.profit)}</b>`);
-    lines.push(`Остаток по кассе за всё время: ${money(s.balance)}`);
+    lines.push(`Остаток всех касс: <b>${money(s.balance)}</b>`);
+    for (const row of (s.cashBalances || []).slice(0, 8)) {
+      lines.push(`   ${esc(row.name)}: ${money(row.balance)}`);
+    }
+  }
+  lines.push('', '<b>Продажи</b>');
+  lines.push(`Продаж / оплат: <b>${s.salesCount || 0}</b>`);
+  if (s.inventorySaleTransactions) {
+    lines.push(`Со склада: ${s.inventorySaleTransactions} операций · ${num(s.inventorySaleUnits)} ед. на ${money(s.inventorySaleTotal)}`);
   }
   lines.push('', '<b>Заявки</b>');
   lines.push(`Принято: ${s.ordersCreated} · выдано/закрыто: ${s.ordersIssued}`);
@@ -233,7 +261,13 @@ function summaryText(s, label, { withMoney, dateLabel }) {
   lines.push('', '<b>Задачи</b>', `Открытых: ${s.tasksOpen} · просрочено: ${s.tasksOverdue}`);
   lines.push('', '<b>Склад</b>', `Нет в наличии: ${s.stockZero} · заканчивается: ${s.stockLow}`);
   if (s.stockLowItems.length) {
-    for (const i of s.stockLowItems.slice(0, 5)) lines.push(`   ${esc(clip(i.name, 50))} — ${num(i.quantity)} ${esc(i.unit || 'шт')}`);
+    lines.push('Рекомендуется докупить:');
+    for (const i of s.stockLowItems.slice(0, 5)) {
+      const sold = Number(i.sold30 || 0) > 0 ? ` · продано за 30 дней: ${num(i.sold30)}` : '';
+      lines.push(
+        `   ${esc(clip(i.name, 45))} — остаток ${num(i.quantity)} ${esc(i.unit || 'шт')}, докупить ≈ <b>${num(i.recommended)}</b>${sold}`
+      );
+    }
   }
   return lines.join('\n');
 }
@@ -247,7 +281,7 @@ function summaryKeyboard(active) {
   ];
   return inline([
     periods.map(([id, label]) => btn(id === active ? `• ${label}` : label, `su:${id}`)),
-    [btn('Меню', 'm')],
+    [btn('Кассы', 'ca'), btn('Меню', 'm')],
   ]);
 }
 
@@ -323,6 +357,7 @@ module.exports = {
   taskCard,
   stockOverviewView,
   stockItemsView,
+  cashRegistersView,
   summaryText,
   summaryKeyboard,
   summaryRangeLabel,
