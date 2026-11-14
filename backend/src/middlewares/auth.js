@@ -21,6 +21,7 @@ function requireAuth(req, res, next) {
       .prepare(
         `
         SELECT s.*, u.id as userId, u.companyId, u.email, u.name, u.role, u.isActive,
+               u.emailVerifiedAt, u.emailVerificationRequired,
                c.id as companyId2, c.name as companyName
         FROM sessions s
         JOIN users u ON u.id = s.userId
@@ -49,7 +50,10 @@ function requireAuth(req, res, next) {
       companyId: session.companyId,
       email: session.email,
       name: session.name,
-      role: session.role
+      role: session.role,
+      emailVerified: Boolean(session.emailVerifiedAt),
+      emailVerifiedAt: session.emailVerifiedAt || null,
+      emailVerificationRequired: Boolean(session.emailVerificationRequired)
     };
 
     req.company = {

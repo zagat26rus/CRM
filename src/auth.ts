@@ -7,6 +7,9 @@ export type AuthUser = {
   name: string
   email: string
   role: 'owner' | 'admin' | 'director' | 'master'
+  emailVerified?: boolean
+  emailVerifiedAt?: string | null
+  emailVerificationRequired?: boolean
 }
 
 export type Company = {
@@ -27,7 +30,7 @@ type AuthState = {
     password: string
     name: string
     company: { name: string; inn?: string; city?: string; address?: string }
-  }) => Promise<void>
+  }) => Promise<{ verificationRequired: boolean; email: string; mailSent: boolean }>
   acceptInvite: (token: string, payload: { name: string; email: string; password: string }) => Promise<void>
   logout: () => Promise<void>
 }
@@ -161,7 +164,12 @@ export const useAuth = create<AuthState>((set, get) => ({
       body: JSON.stringify({ email, password }),
     })
     const data = await res.json()
-    if (!res.ok) throw new Error(data?.error || 'Ошибка входа')
+    if (!res.ok) {
+      const error = new Error(data?.error || 'Ошибка входа')
+      ;(error as any).code = data?.code
+      ;(error as any).email = data?.email
+      throw error
+    }
     get().setToken(data.token)
     if (remember) saveRemembered(email.trim(), password)
     else clearRemembered()
@@ -175,10 +183,18 @@ export const useAuth = create<AuthState>((set, get) => ({
       body: JSON.stringify(payload),
     })
     const data = await res.json()
+    if (data.verificationRequired) {
+      return {
+        verificationRequired: true,
+        email: data.email || payload.email.trim(),
+        mailSent: data.mailSent !== false,
+      }
+    }
     if (!res.ok) throw new Error(data?.error || 'Ошибка регистрации')
     get().setToken(data.token)
     saveRemembered(payload.email.trim(), payload.password)
     set({ user: data.user, company: data.company })
+    return { verificationRequired: false, email: payload.email.trim(), mailSent: false }
   },
 
   acceptInvite: async (token, payload) => {

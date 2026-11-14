@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth'
+import { apiFetch } from '../api'
 
 type Step = 1 | 2 | 3
 
@@ -47,6 +48,9 @@ export default function Register() {
 
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [verificationRequired, setVerificationRequired] = useState(false)
+  const [mailSent, setMailSent] = useState(false)
+  const [resending, setResending] = useState(false)
 
   const canNext = useMemo(() => {
     if (step === 1) return name.trim() && email.trim() && password.length >= 6
@@ -60,7 +64,7 @@ export default function Register() {
     else if (step === 2) {
       setLoading(true)
       try {
-        await auth.registerOwner({
+        const result = await auth.registerOwner({
           name: name.trim(),
           email: email.trim(),
           password,
@@ -71,6 +75,8 @@ export default function Register() {
             address: companyAddress.trim() || undefined
           }
         })
+        setVerificationRequired(result.verificationRequired)
+        setMailSent(result.mailSent)
         setStep(3)
       } catch (e: any) {
         setError(e?.message || 'Ошибка регистрации')
@@ -78,7 +84,26 @@ export default function Register() {
         setLoading(false)
       }
     } else {
-      nav('/', { replace: true })
+      nav(verificationRequired ? '/login' : '/', { replace: true })
+    }
+  }
+
+  async function resend() {
+    setResending(true)
+    setError(null)
+    try {
+      const res = await apiFetch('/auth/email-verification/resend', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: email.trim() }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data?.error || 'Не удалось отправить письмо')
+      setMailSent(true)
+    } catch (e: any) {
+      setError(e?.message || 'Не удалось отправить письмо')
+    } finally {
+      setResending(false)
     }
   }
 
@@ -141,8 +166,23 @@ export default function Register() {
 
           {step === 3 && (
             <div className='space-y-2'>
-              <div className='text-lg font-semibold'>Аккаунт создан</div>
-              <div className='text-sm text-muted'>Можно переходить в систему.</div>
+              <div className='text-lg font-semibold'>
+                {verificationRequired ? 'Подтвердите email' : 'Аккаунт создан'}
+              </div>
+              {verificationRequired ? (
+                <>
+                  <div className='text-sm text-muted'>
+                    {mailSent
+                      ? <>Отправили письмо на <b className='text-text'>{email}</b>. Перейдите по ссылке — после подтверждения вход выполнится автоматически.</>
+                      : <>Аккаунт создан, но письмо пока не отправлено. Нажмите кнопку ниже, чтобы повторить отправку на <b className='text-text'>{email}</b>.</>}
+                  </div>
+                  <button type='button' className='btn secondary mt-3' onClick={resend} disabled={resending}>
+                    {resending ? 'Отправка…' : 'Отправить письмо ещё раз'}
+                  </button>
+                </>
+              ) : (
+                <div className='text-sm text-muted'>Можно переходить в систему.</div>
+              )}
             </div>
           )}
 
@@ -157,7 +197,7 @@ export default function Register() {
                 </button>
               )}
               <button className='btn' onClick={next} disabled={loading || !canNext}>
-                {loading ? 'Сохранение…' : step === 3 ? 'Перейти в систему' : 'Далее'}
+                {loading ? 'Сохранение…' : step === 3 ? (verificationRequired ? 'Перейти ко входу' : 'Перейти в систему') : 'Далее'}
               </button>
             </div>
           </div>

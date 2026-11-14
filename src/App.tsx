@@ -21,6 +21,7 @@ import { useEffect, useState } from 'react'
 import {Toasts} from './utils'
 import Login from './pages/Login'
 import Register from './pages/Register'
+import VerifyEmail from './pages/VerifyEmail'
 import Invite from './pages/Invite'
 import { useAuth } from './auth'
 import { apiFetch } from './api'
@@ -61,6 +62,7 @@ export default function App(){
   const isAuthRoute =
     loc.pathname === '/login' ||
     loc.pathname === '/register' ||
+    loc.pathname === '/verify-email' ||
     loc.pathname.startsWith('/invite/') ||
     loc.pathname.startsWith('/track/')
 
@@ -147,6 +149,7 @@ export default function App(){
           <Routes>
             <Route path='/login' element={<Login/>} />
             <Route path='/register' element={<Register/>} />
+            <Route path='/verify-email' element={<VerifyEmail/>} />
             <Route path='/invite/:token' element={<Invite/>} />
             <Route path='/track/:token' element={<Track/>} />
 

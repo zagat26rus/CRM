@@ -4,6 +4,7 @@ const router = express.Router();
 const { db, getCurrentTime } = require('../config/database');
 const { requireAuth, sha256 } = require('../middlewares/auth');
 const { seedCompanyDictionaries } = require('../utils/seedData');
+const emailService = require('../utils/emailService');
 
 function base64url(buf) {
   return Buffer.from(buf).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
@@ -38,8 +39,41 @@ function createSession(userId) {
   return { token, expiresAt };
 }
 
+function createEmailVerificationToken(userId) {
+  const token = base64url(crypto.randomBytes(32));
+  const tokenHash = sha256(token);
+  const now = getCurrentTime();
+  const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+  db.prepare('DELETE FROM email_verification_tokens WHERE userId = ? AND usedAt IS NULL').run(userId);
+  db.prepare(
+    'INSERT INTO email_verification_tokens (userId, tokenHash, expiresAt, createdAt) VALUES (?, ?, ?, ?)'
+  ).run(userId, tokenHash, expiresAt, now);
+  return { token, expiresAt };
+}
+
+async function sendVerificationForUser(user) {
+  const verification = createEmailVerificationToken(user.id);
+  await emailService.sendVerificationEmail({
+    email: user.email,
+    name: user.name,
+    token: verification.token,
+  });
+  const now = getCurrentTime();
+  db.prepare('UPDATE users SET emailVerificationSentAt = ?, updatedAt = ? WHERE id = ?').run(now, now, user.id);
+  return { expiresAt: verification.expiresAt, sentAt: now };
+}
+
 function safeUserRow(u) {
-  return { id: u.id, companyId: u.companyId, name: u.name, email: u.email, role: u.role };
+  return {
+    id: u.id,
+    companyId: u.companyId,
+    name: u.name,
+    email: u.email,
+    role: u.role,
+    emailVerified: Boolean(u.emailVerifiedAt),
+    emailVerifiedAt: u.emailVerifiedAt || null,
+    emailVerificationRequired: Boolean(u.emailVerificationRequired),
+  };
 }
 
 function seedDefaultPaymentCategories(companyId) {
@@ -69,7 +103,7 @@ function seedDefaultPaymentCategories(companyId) {
 }
 
 // Register first account (owner) + company
-router.post('/register', (req, res) => {
+router.post('/register', async (req, res) => {
   try {
     const { email, password, name, company } = req.body || {};
     const e = String(email || '').trim().toLowerCase();
@@ -81,6 +115,9 @@ router.post('/register', (req, res) => {
     if (!e || !p || !n || !companyName) {
       return res.status(400).json({ error: 'Заполните обязательные поля' });
     }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e) || e.length > 255) {
+      return res.status(400).json({ error: 'Некорректный формат email' });
+    }
     if (p.length < 6) {
       return res.status(400).json({ error: 'Пароль должен быть не короче 6 символов' });
     }
@@ -88,6 +125,7 @@ router.post('/register', (req, res) => {
     const existing = db.prepare('SELECT id FROM users WHERE email = ?').get(e);
     if (existing) return res.status(400).json({ error: 'Пользователь с таким email уже существует' });
 
+    const verificationRequired = emailService.isConfigured();
     const now = getCurrentTime();
     const tx = db.transaction(() => {
       const companiesBefore = db.prepare('SELECT COUNT(*) as count FROM companies').get()?.count || 0;
@@ -136,11 +174,24 @@ router.post('/register', (req, res) => {
       const userResult = db
         .prepare(
           `
-          INSERT INTO users (companyId, name, email, phone, role, passwordSalt, passwordHash, isActive, createdAt, updatedAt)
-          VALUES (?, ?, ?, ?, 'owner', ?, ?, 1, ?, ?)
+          INSERT INTO users (
+            companyId, name, email, phone, role, passwordSalt, passwordHash, isActive,
+            emailVerificationRequired, createdAt, updatedAt
+          )
+          VALUES (?, ?, ?, ?, 'owner', ?, ?, 1, ?, ?, ?)
         `
         )
-        .run(companyId, n, e, String(req.body?.phone || ''), salt, hash, now, now);
+        .run(
+          companyId,
+          n,
+          e,
+          String(req.body?.phone || ''),
+          salt,
+          hash,
+          verificationRequired ? 1 : 0,
+          now,
+          now
+        );
 
       return { companyId, userId: userResult.lastInsertRowid };
     });
@@ -148,8 +199,28 @@ router.post('/register', (req, res) => {
     const created = tx();
     const user = db.prepare('SELECT * FROM users WHERE id = ?').get(created.userId);
     const comp = db.prepare('SELECT * FROM companies WHERE id = ?').get(created.companyId);
-    const session = createSession(created.userId);
+    if (verificationRequired) {
+      try {
+        await sendVerificationForUser(user);
+      } catch (mailError) {
+        console.error('Ошибка отправки подтверждения email:', mailError?.message || mailError);
+        return res.status(503).json({
+          error: 'Аккаунт создан, но письмо не отправлено. Повторите отправку на странице входа.',
+          verificationRequired: true,
+          mailSent: false,
+          email: user.email,
+        });
+      }
+      return res.status(201).json({
+        verificationRequired: true,
+        mailSent: true,
+        email: user.email,
+        user: safeUserRow(user),
+        company: { id: comp.id, name: comp.name },
+      });
+    }
 
+    const session = createSession(created.userId);
     res.status(201).json({
       token: session.token,
       user: safeUserRow(user),
@@ -230,6 +301,13 @@ router.post('/login', (req, res) => {
       // Не раскрываем, правильный ли email (защита от перебора)
       return res.status(401).json({ error: 'Неверный email или пароль' });
     }
+    if (user.emailVerificationRequired && !user.emailVerifiedAt) {
+      return res.status(403).json({
+        error: 'Сначала подтвердите email. Мы отправили ссылку на вашу почту.',
+        code: 'email_verification_required',
+        email: user.email,
+      });
+    }
     
     // Сбрасываем счетчик при успешном входе
     loginAttempts.delete(`login:${e}`);
@@ -253,6 +331,102 @@ router.get('/me', requireAuth, (req, res) => {
   res.json({ user: req.user, company: req.company });
 });
 
+router.get('/email-verification/status', requireAuth, (req, res) => {
+  const user = db
+    .prepare(
+      `SELECT id, email, emailVerifiedAt, emailVerificationRequired, emailVerificationSentAt
+       FROM users WHERE id = ?`
+    )
+    .get(req.user.id);
+  res.json({
+    configured: emailService.isConfigured(),
+    email: user?.email || req.user.email,
+    verified: Boolean(user?.emailVerifiedAt),
+    verifiedAt: user?.emailVerifiedAt || null,
+    required: Boolean(user?.emailVerificationRequired),
+    sentAt: user?.emailVerificationSentAt || null,
+  });
+});
+
+router.post('/email-verification/request', requireAuth, async (req, res) => {
+  try {
+    if (!emailService.isConfigured()) {
+      return res.status(503).json({ error: 'Отправка почты пока не настроена администратором' });
+    }
+    const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id);
+    if (!user) return res.status(404).json({ error: 'Пользователь не найден' });
+    if (user.emailVerifiedAt) return res.json({ ok: true, alreadyVerified: true });
+    const lastSent = user.emailVerificationSentAt ? new Date(user.emailVerificationSentAt).getTime() : 0;
+    if (lastSent && Date.now() - lastSent < 60_000) {
+      return res.status(429).json({ error: 'Письмо уже отправлено. Подождите минуту.' });
+    }
+    const result = await sendVerificationForUser(user);
+    res.json({ ok: true, expiresAt: result.expiresAt });
+  } catch (error) {
+    console.error('Ошибка запроса подтверждения email:', error?.message || error);
+    res.status(502).json({ error: 'Не удалось отправить письмо. Проверьте почтовые настройки.' });
+  }
+});
+
+router.post('/email-verification/resend', async (req, res) => {
+  const generic = { ok: true, message: 'Если адрес зарегистрирован, письмо будет отправлено.' };
+  try {
+    if (!emailService.isConfigured()) return res.status(503).json({ error: 'Отправка почты пока не настроена' });
+    const email = String(req.body?.email || '').trim().toLowerCase();
+    if (!email) return res.json(generic);
+    const user = db.prepare('SELECT * FROM users WHERE email = ?').get(email);
+    if (!user || user.emailVerifiedAt) return res.json(generic);
+    const lastSent = user.emailVerificationSentAt ? new Date(user.emailVerificationSentAt).getTime() : 0;
+    if (!lastSent || Date.now() - lastSent >= 60_000) await sendVerificationForUser(user);
+    return res.json(generic);
+  } catch (error) {
+    console.error('Ошибка повторной отправки подтверждения:', error?.message || error);
+    return res.json(generic);
+  }
+});
+
+router.post('/email-verification/verify', async (req, res) => {
+  try {
+    const token = String(req.body?.token || '').trim();
+    if (token.length < 32 || token.length > 200) {
+      return res.status(400).json({ error: 'Некорректная ссылка подтверждения' });
+    }
+    const tokenHash = sha256(token);
+    const row = db
+      .prepare(
+        `SELECT t.id AS tokenId, t.userId, t.expiresAt, u.*
+         FROM email_verification_tokens t
+         JOIN users u ON u.id = t.userId
+         WHERE t.tokenHash = ? AND t.usedAt IS NULL
+         LIMIT 1`
+      )
+      .get(tokenHash);
+    if (!row || new Date(row.expiresAt).getTime() <= Date.now()) {
+      return res.status(400).json({ error: 'Ссылка недействительна или истекла' });
+    }
+    const now = getCurrentTime();
+    const tx = db.transaction(() => {
+      db.prepare('UPDATE email_verification_tokens SET usedAt = ? WHERE id = ?').run(now, row.tokenId);
+      db.prepare(
+        'UPDATE users SET emailVerifiedAt = ?, emailVerificationRequired = 0, updatedAt = ? WHERE id = ?'
+      ).run(now, now, row.userId);
+    });
+    tx();
+    const user = db.prepare('SELECT * FROM users WHERE id = ?').get(row.userId);
+    const company = db.prepare('SELECT id, name FROM companies WHERE id = ?').get(user.companyId);
+    const session = createSession(user.id);
+    res.json({
+      ok: true,
+      token: session.token,
+      user: safeUserRow(user),
+      company,
+    });
+  } catch (error) {
+    console.error('Ошибка подтверждения email:', error);
+    res.status(500).json({ error: 'Не удалось подтвердить email' });
+  }
+});
+
 router.post('/logout', requireAuth, (req, res) => {
   try {
     db.prepare('DELETE FROM sessions WHERE id = ?').run(req.session.id);
@@ -269,7 +443,12 @@ router.put('/profile', requireAuth, (req, res) => {
 
     const now = getCurrentTime();
     db.prepare('UPDATE users SET name = ?, updatedAt = ? WHERE id = ?').run(name, now, req.user.id);
-    const user = db.prepare('SELECT id, companyId, name, email, role FROM users WHERE id = ?').get(req.user.id);
+    const user = db
+      .prepare(
+        `SELECT id, companyId, name, email, role, emailVerifiedAt, emailVerificationRequired
+         FROM users WHERE id = ?`
+      )
+      .get(req.user.id);
     res.json({ user: safeUserRow(user) });
   } catch (e) {
     console.error('Ошибка обновления профиля:', e);

@@ -776,6 +776,40 @@ function ProfileModal({ onClose }: { onClose: () => void }) {
   const [newPassword, setNewPassword] = useState('')
   const [savingProfile, setSavingProfile] = useState(false)
   const [savingPassword, setSavingPassword] = useState(false)
+  const [emailStatus, setEmailStatus] = useState<{
+    configured: boolean
+    verified: boolean
+    verifiedAt?: string | null
+    sentAt?: string | null
+  } | null>(null)
+  const [sendingVerification, setSendingVerification] = useState(false)
+
+  useEffect(() => {
+    apiFetch('/auth/email-verification/status')
+      .then(async (res) => res.ok ? res.json() : null)
+      .then((data) => data && setEmailStatus(data))
+      .catch(() => {})
+  }, [])
+
+  async function requestEmailVerification() {
+    setSendingVerification(true)
+    try {
+      const res = await apiFetch('/auth/email-verification/request', { method: 'POST' })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data?.error || 'Не удалось отправить письмо')
+      if (data.alreadyVerified) {
+        setEmailStatus((prev) => prev ? { ...prev, verified: true } : prev)
+        toast.push('Email уже подтверждён')
+      } else {
+        setEmailStatus((prev) => prev ? { ...prev, sentAt: new Date().toISOString() } : prev)
+        toast.push('Письмо подтверждения отправлено')
+      }
+    } catch (e: any) {
+      toast.push(e?.message || 'Не удалось отправить письмо')
+    } finally {
+      setSendingVerification(false)
+    }
+  }
 
   async function saveProfile() {
     const trimmed = name.trim()
@@ -830,7 +864,14 @@ function ProfileModal({ onClose }: { onClose: () => void }) {
           </div>
           <div>
             <div className='label'>Email</div>
-            <div className='p-3 bg-bg border border-border rounded-xl text-muted'>{auth.user?.email || '—'}</div>
+            <div className='p-3 bg-bg border border-border rounded-xl'>
+              <div>{auth.user?.email || '—'}</div>
+              <div className={`text-xs mt-1 ${emailStatus?.verified ? 'text-success' : 'text-muted'}`}>
+                {emailStatus?.verified
+                  ? `Подтверждён${emailStatus.verifiedAt ? ` ${new Date(emailStatus.verifiedAt).toLocaleDateString('ru-RU')}` : ''}`
+                  : 'Не подтверждён'}
+              </div>
+            </div>
           </div>
           <div>
             <div className='label'>Роль</div>
@@ -840,6 +881,26 @@ function ProfileModal({ onClose }: { onClose: () => void }) {
         <button className='btn' onClick={saveProfile} disabled={savingProfile}>
           {savingProfile ? 'Сохранение…' : 'Сохранить имя'}
         </button>
+
+        {emailStatus && !emailStatus.verified && (
+          <div className='border-t border-border pt-5 space-y-2'>
+            <div className='font-semibold'>Подтверждение email</div>
+            <p className='text-sm text-muted'>
+              Подтверждение добровольное для уже созданных аккаунтов и не влияет на вход.
+            </p>
+            {emailStatus.configured ? (
+              <button
+                className='btn secondary'
+                onClick={requestEmailVerification}
+                disabled={sendingVerification}
+              >
+                {sendingVerification ? 'Отправка…' : emailStatus.sentAt ? 'Отправить письмо повторно' : 'Подтвердить email'}
+              </button>
+            ) : (
+              <div className='text-sm text-warning'>Отправка почты ещё не настроена на сервере.</div>
+            )}
+          </div>
+        )}
 
         <div className='border-t border-border pt-5 space-y-4'>
           <div className='font-semibold'>Смена пароля</div>

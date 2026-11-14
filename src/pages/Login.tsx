@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { getRememberedCredentials, useAuth } from '../auth'
+import { apiFetch } from '../api'
 
 export default function Login() {
   const nav = useNavigate()
@@ -11,6 +12,9 @@ export default function Login() {
   const [remember, setRemember] = useState(true)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [notice, setNotice] = useState<string | null>(null)
+  const [verificationEmail, setVerificationEmail] = useState('')
+  const [resending, setResending] = useState(false)
 
   useEffect(() => {
     if (auth.token) {
@@ -20,14 +24,36 @@ export default function Login() {
 
   async function submit() {
     setError(null)
+    setNotice(null)
+    setVerificationEmail('')
     setLoading(true)
     try {
       await auth.login(email, password, remember)
       nav('/', { replace: true })
     } catch (e: any) {
       setError(e?.message || 'Ошибка входа')
+      if (e?.code === 'email_verification_required') setVerificationEmail(e?.email || email)
     } finally {
       setLoading(false)
+    }
+  }
+
+  async function resendVerification() {
+    setResending(true)
+    try {
+      const res = await apiFetch('/auth/email-verification/resend', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: verificationEmail || email }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data?.error || 'Не удалось отправить письмо')
+      setError(null)
+      setNotice('Письмо отправлено повторно. Проверьте почту.')
+    } catch (e: any) {
+      setError(e?.message || 'Не удалось отправить письмо')
+    } finally {
+      setResending(false)
     }
   }
 
@@ -41,6 +67,12 @@ export default function Login() {
           </div>
 
           {error && <div className='p-3 border border-danger text-danger rounded-xl bg-bg'>{error}</div>}
+          {notice && <div className='p-3 border border-success text-success rounded-xl bg-bg'>{notice}</div>}
+          {verificationEmail && (
+            <button type='button' className='btn secondary w-full' disabled={resending} onClick={resendVerification}>
+              {resending ? 'Отправка…' : 'Отправить письмо подтверждения ещё раз'}
+            </button>
+          )}
 
           <div>
             <label className='label'>Email</label>

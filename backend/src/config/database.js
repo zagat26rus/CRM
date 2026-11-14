@@ -51,6 +51,10 @@ function tableSql(tableName) {
 }
 
 function migrateLegacySchema() {
+  addColumnIfMissing('users', 'emailVerifiedAt TEXT DEFAULT NULL');
+  addColumnIfMissing('users', 'emailVerificationRequired INTEGER DEFAULT 0');
+  addColumnIfMissing('users', 'emailVerificationSentAt TEXT DEFAULT NULL');
+
   // Add companyId columns where safe
   [
     'orders',
@@ -473,6 +477,19 @@ function initDatabase() {
       FOREIGN KEY (userId) REFERENCES users(id) ON DELETE CASCADE
     );
   `);
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS email_verification_tokens (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      userId INTEGER NOT NULL,
+      tokenHash TEXT NOT NULL UNIQUE,
+      expiresAt TEXT NOT NULL,
+      usedAt TEXT DEFAULT NULL,
+      createdAt TEXT,
+      FOREIGN KEY (userId) REFERENCES users(id) ON DELETE CASCADE
+    );
+  `);
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_email_verification_user ON email_verification_tokens(userId, usedAt);`);
   db.exec(`CREATE INDEX IF NOT EXISTS idx_sessions_userId ON sessions(userId);`);
 
   db.exec(`
