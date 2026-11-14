@@ -723,7 +723,7 @@ function OrderFormEditorModal({ onClose }: { onClose: () => void }) {
                           value={field.options.join('\n')}
                           disabled={!canEdit}
                           onChange={(e) => updateCustom(field.id, {
-                            options: e.target.value.split('\n').map((v) => v.trim()).filter(Boolean),
+                            options: e.target.value.split('\n'),
                           })}
                           placeholder={'Вариант 1\nВариант 2'}
                         />
