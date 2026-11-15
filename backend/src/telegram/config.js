@@ -37,7 +37,7 @@ function cfg() {
     apiBase,
     relayKey: String(process.env.TELEGRAM_RELAY_KEY || '').trim(),
     webhookSecret: String(process.env.TELEGRAM_WEBHOOK_SECRET || '').trim(),
-    webhookUrl: String(process.env.TELEGRAM_WEBHOOK_URL || 'https://www.fedfix.ru/api/telegram/webhook').trim(),
+    webhookUrl: String(process.env.TELEGRAM_WEBHOOK_URL || 'https://fedfix.ru/api/telegram/webhook').trim(),
     botUsername: String(process.env.TELEGRAM_BOT_USERNAME || 'fixnetcrm_bot').replace(/^@/, ''),
     timeZone: String(process.env.TELEGRAM_TZ || 'Europe/Moscow'),
     loopbackUrl: String(process.env.CRM_LOOPBACK_URL || `http://127.0.0.1:${process.env.PORT || 5000}`).replace(/\/+$/, ''),

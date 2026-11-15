@@ -4,6 +4,6 @@ const fallback = import.meta.env.PROD ? '/api' : 'http://localhost:5000/api'
 
 export const API_URL = (raw?.trim() || fallback).replace(/\/+$/, '')
 
-/** Публичный адрес из QR/SMS — сертификат production выпущен на www.fedfix.ru. */
+/** Публичный адрес для QR, SMS и ссылок отслеживания. */
 const publicSiteRaw = import.meta.env.VITE_PUBLIC_SITE_URL as string | undefined
-export const PUBLIC_SITE_URL = (publicSiteRaw?.trim() || 'https://www.fedfix.ru').replace(/\/+$/, '')
+export const PUBLIC_SITE_URL = (publicSiteRaw?.trim() || 'https://fedfix.ru').replace(/\/+$/, '')
