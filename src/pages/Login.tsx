@@ -96,9 +96,8 @@ export default function Login() {
   }
 
   return (
-    <div className='min-h-[calc(100vh-56px)] flex items-center justify-center'>
-      <div className='card w-full max-w-md'>
-        <div className='card-inner space-y-5'>
+    <div className='card auth-card'>
+      <div className='card-inner space-y-5'>
           <div>
             <h1 className='text-2xl font-bold'>{recovery ? 'Восстановление пароля' : 'Вход'}</h1>
             <div className='text-sm text-muted mt-1'>
@@ -179,7 +178,6 @@ export default function Login() {
           <div className='text-sm text-muted'>
             Нет аккаунта? <Link className='link' to='/register'>Регистрация</Link>
           </div>
-        </div>
       </div>
     </div>
   )
