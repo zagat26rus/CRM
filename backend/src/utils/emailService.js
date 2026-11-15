@@ -33,7 +33,7 @@ function config() {
     user,
     pass,
     from,
-    publicSiteUrl: String(process.env.PUBLIC_SITE_URL || 'https://www.fedfix.ru').replace(/\/+$/, ''),
+    publicSiteUrl: String(process.env.PUBLIC_SITE_URL || 'https://fedfix.ru').replace(/\/+$/, ''),
   };
 }
 
