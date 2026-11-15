@@ -74,6 +74,11 @@ body {
   @apply bg-surface/80 border border-border rounded-xl sm:rounded-2xl shadow-soft;
   max-width: 100%;
 }
+.card.auth-card {
+  width: min(100%, 26rem);
+  max-width: 26rem;
+  flex: none;
+}
 .card-inner {
   @apply p-4 sm:p-5;
 }

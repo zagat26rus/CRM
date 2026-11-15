@@ -67,6 +67,7 @@ export default function App(){
     loc.pathname === '/reset-password' ||
     loc.pathname.startsWith('/invite/') ||
     loc.pathname.startsWith('/track/')
+  const isLogin = loc.pathname === '/login'
 
   if (!auth.bootstrapped) {
     return (
@@ -145,9 +146,11 @@ export default function App(){
       )}
 
       {/* Main */}
-      <main className={`flex-1 min-w-0 w-full max-w-full overflow-x-clip ${!isAuthRoute ? 'pt-14 lg:pt-0' : ''}`}>
+      <main className={`flex-1 min-w-0 w-full max-w-full overflow-x-clip ${isLogin ? 'flex flex-col' : ''} ${!isAuthRoute ? 'pt-14 lg:pt-0' : ''}`}>
         {!isAuthRoute && <Topbar refreshKey={loc.pathname} onMenuClick={() => setMobileMenuOpen(true)} />}
-        <div className='container-page pb-[calc(5rem+env(safe-area-inset-bottom))] lg:pb-8'>
+        <div className={isLogin
+          ? 'flex-1 w-full flex items-center justify-center px-4 py-8'
+          : 'container-page pb-[calc(5rem+env(safe-area-inset-bottom))] lg:pb-8'}>
           <Routes>
             <Route path='/login' element={<Login/>} />
             <Route path='/register' element={<Register/>} />
