@@ -5,6 +5,7 @@ const { db, getCurrentTime } = require('../config/database');
 const { requireAuth, sha256 } = require('../middlewares/auth');
 const { seedCompanyDictionaries } = require('../utils/seedData');
 const emailService = require('../utils/emailService');
+const yandexAuth = require('../utils/yandexAuth');
 
 function base64url(buf) {
   return Buffer.from(buf).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
@@ -592,6 +593,69 @@ router.post('/password-reset/confirm', (req, res) => {
   } catch (error) {
     console.error('Ошибка сброса пароля:', error?.message || error);
     res.status(500).json({ error: 'Не удалось сменить пароль' });
+  }
+});
+
+function yandexEmail(profile) {
+  const direct = String(profile?.default_email || '').trim().toLowerCase();
+  if (direct) return direct;
+  const list = Array.isArray(profile?.emails) ? profile.emails : [];
+  return String(list[0] || '').trim().toLowerCase();
+}
+
+function loginWithYandexProfile(profile) {
+  const yandexId = String(profile?.id || '').trim();
+  const email = yandexEmail(profile);
+  if (!yandexId || !email || email.length > 255) return { error: 'no_email' };
+
+  const byYandex = db.prepare('SELECT * FROM users WHERE yandexId = ?').get(yandexId);
+  if (byYandex) {
+    if (!byYandex.isActive) return { error: 'blocked' };
+    return { user: byYandex };
+  }
+
+  const byEmail = db.prepare('SELECT * FROM users WHERE email = ?').get(email);
+  if (!byEmail) return { error: 'no_account' };
+  if (!byEmail.isActive) return { error: 'blocked' };
+  if (byEmail.yandexId && byEmail.yandexId !== yandexId) return { error: 'conflict' };
+
+  const now = getCurrentTime();
+  db.prepare(
+    `UPDATE users
+     SET yandexId = ?, emailVerifiedAt = COALESCE(emailVerifiedAt, ?), emailVerificationRequired = 0, updatedAt = ?
+     WHERE id = ?`
+  ).run(yandexId, now, now, byEmail.id);
+  return { user: db.prepare('SELECT * FROM users WHERE id = ?').get(byEmail.id) };
+}
+
+router.get('/yandex/configured', (req, res) => {
+  res.json({ enabled: yandexAuth.isConfigured() });
+});
+
+router.get('/yandex/start', (req, res) => {
+  if (!yandexAuth.isConfigured()) {
+    return res.status(503).json({ error: 'Вход через Яндекс пока не настроен' });
+  }
+  res.redirect(yandexAuth.authorizeUrl(yandexAuth.createState()));
+});
+
+router.get('/yandex/callback', async (req, res) => {
+  const site = yandexAuth.config().publicSiteUrl;
+  const fail = (code) => res.redirect(`${site}/login?yandex_error=${encodeURIComponent(code)}`);
+  try {
+    if (!yandexAuth.isConfigured()) return fail('failed');
+    if (req.query.error) return fail('denied');
+    const code = String(req.query.code || '');
+    if (!code || !yandexAuth.verifyState(req.query.state)) return fail('state');
+    const accessToken = await yandexAuth.exchangeCode(code);
+    const profile = await yandexAuth.fetchProfile(accessToken);
+    const result = loginWithYandexProfile(profile);
+    if (result.error) return fail(result.error);
+    const session = createSession(result.user.id);
+    res.redirect(`${site}/yandex-login#token=${encodeURIComponent(session.token)}`);
+  } catch (error) {
+    console.error('Ошибка входа через Яндекс:', error?.message || error);
+    return fail('failed');
   }
 });
 

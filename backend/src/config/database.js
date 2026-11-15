@@ -54,6 +54,8 @@ function migrateLegacySchema() {
   addColumnIfMissing('users', 'emailVerifiedAt TEXT DEFAULT NULL');
   addColumnIfMissing('users', 'emailVerificationRequired INTEGER DEFAULT 0');
   addColumnIfMissing('users', 'emailVerificationSentAt TEXT DEFAULT NULL');
+  addColumnIfMissing('users', 'yandexId TEXT DEFAULT NULL');
+  db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_users_yandexId ON users(yandexId) WHERE yandexId IS NOT NULL');
 
   // Add companyId columns where safe
   [
@@ -460,6 +462,7 @@ function initDatabase() {
       passwordSalt TEXT NOT NULL,
       passwordHash TEXT NOT NULL,
       isActive BOOLEAN DEFAULT 1,
+      yandexId TEXT DEFAULT NULL,
       createdAt TEXT,
       updatedAt TEXT,
       FOREIGN KEY (companyId) REFERENCES companies(id) ON DELETE CASCADE
