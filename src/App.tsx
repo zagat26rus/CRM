@@ -67,7 +67,7 @@ export default function App(){
     loc.pathname === '/reset-password' ||
     loc.pathname.startsWith('/invite/') ||
     loc.pathname.startsWith('/track/')
-  const isLogin = loc.pathname === '/login'
+  const isCenteredAuth = loc.pathname === '/login' || loc.pathname === '/register'
 
   if (!auth.bootstrapped) {
     return (
@@ -146,11 +146,12 @@ export default function App(){
       )}
 
       {/* Main */}
-      <main className={`flex-1 min-w-0 w-full max-w-full overflow-x-clip ${isLogin ? 'flex flex-col' : ''} ${!isAuthRoute ? 'pt-14 lg:pt-0' : ''}`}>
+      <main className={`flex-1 min-w-0 w-full max-w-full overflow-x-clip ${isCenteredAuth ? 'flex flex-col' : ''} ${!isAuthRoute ? 'pt-14 lg:pt-0' : ''}`}>
         {!isAuthRoute && <Topbar refreshKey={loc.pathname} onMenuClick={() => setMobileMenuOpen(true)} />}
-        <div className={isLogin
-          ? 'flex-1 w-full flex items-center justify-center px-4 py-8'
+        <div className={isCenteredAuth
+          ? 'flex-1 w-full min-h-0 overflow-y-auto'
           : 'container-page pb-[calc(5rem+env(safe-area-inset-bottom))] lg:pb-8'}>
+          <div className={isCenteredAuth ? 'min-h-full flex items-center justify-center px-4 py-8' : undefined}>
           <Routes>
             <Route path='/login' element={<Login/>} />
             <Route path='/register' element={<Register/>} />
@@ -176,6 +177,7 @@ export default function App(){
             <Route path='/settings' element={<Settings/>} />
             <Route path='/help' element={<Help/>} />
           </Routes>
+          </div>
         </div>
       </main>
 
