@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
-import { useNavigate, Link } from 'react-router-dom'
+import { useNavigate, Link, useSearchParams } from 'react-router-dom'
 import { getRememberedCredentials, useAuth } from '../auth'
-import { apiFetch } from '../api'
+import { apiFetch, apiUrl } from '../api'
 
 export default function Login() {
   const nav = useNavigate()
@@ -17,12 +17,38 @@ export default function Login() {
   const [resending, setResending] = useState(false)
   const [recovery, setRecovery] = useState(false)
   const [recoverySent, setRecoverySent] = useState(false)
+  const [yandexEnabled, setYandexEnabled] = useState(false)
+  const [params, setParams] = useSearchParams()
 
   useEffect(() => {
     if (auth.token) {
       nav('/', { replace: true })
     }
   }, [auth.token, nav])
+
+  useEffect(() => {
+    const code = params.get('yandex_error')
+    if (!code) return
+    const messages: Record<string, string> = {
+      no_account: 'В CRM нет аккаунта с почтой этого Яндекса. Зарегистрируйтесь или войдите по паролю.',
+      blocked: 'Пользователь заблокирован.',
+      denied: 'Вход через Яндекс отменён.',
+      no_email: 'Яндекс не передал адрес почты. Разрешите доступ к почте и попробуйте снова.',
+      conflict: 'Эта почта уже связана с другим аккаунтом Яндекса.',
+      state: 'Ссылка входа устарела. Нажмите «Войти через Яндекс» ещё раз.',
+      failed: 'Не удалось войти через Яндекс. Попробуйте ещё раз.',
+    }
+    setError(messages[code] || messages.failed)
+    params.delete('yandex_error')
+    setParams(params, { replace: true })
+  }, [])
+
+  useEffect(() => {
+    apiFetch('/auth/yandex/configured')
+      .then((res) => res.json())
+      .then((data) => setYandexEnabled(Boolean(data?.enabled)))
+      .catch(() => setYandexEnabled(false))
+  }, [])
 
   async function submit() {
     setError(null)
@@ -161,6 +187,14 @@ export default function Login() {
               <button className='btn w-full' onClick={submit} disabled={loading || !email || !password}>
                 {loading ? 'Вход…' : 'Войти'}
               </button>
+              {yandexEnabled && (
+                <>
+                  <div className='text-center text-xs text-muted'>или</div>
+                  <a className='btn secondary w-full' href={apiUrl('/auth/yandex/start')}>
+                    Войти через Яндекс
+                  </a>
+                </>
+              )}
             </>
           )}
 

@@ -23,6 +23,7 @@ import Login from './pages/Login'
 import Register from './pages/Register'
 import VerifyEmail from './pages/VerifyEmail'
 import ResetPassword from './pages/ResetPassword'
+import YandexLogin from './pages/YandexLogin'
 import Invite from './pages/Invite'
 import { useAuth } from './auth'
 import { apiFetch } from './api'
@@ -65,9 +66,10 @@ export default function App(){
     loc.pathname === '/register' ||
     loc.pathname === '/verify-email' ||
     loc.pathname === '/reset-password' ||
+    loc.pathname === '/yandex-login' ||
     loc.pathname.startsWith('/invite/') ||
     loc.pathname.startsWith('/track/')
-  const isCenteredAuth = loc.pathname === '/login' || loc.pathname === '/register'
+  const isCenteredAuth = loc.pathname === '/login' || loc.pathname === '/register' || loc.pathname === '/yandex-login'
 
   if (!auth.bootstrapped) {
     return (
@@ -157,6 +159,7 @@ export default function App(){
             <Route path='/register' element={<Register/>} />
             <Route path='/verify-email' element={<VerifyEmail/>} />
             <Route path='/reset-password' element={<ResetPassword/>} />
+            <Route path='/yandex-login' element={<YandexLogin/>} />
             <Route path='/invite/:token' element={<Invite/>} />
             <Route path='/track/:token' element={<Track/>} />
 
